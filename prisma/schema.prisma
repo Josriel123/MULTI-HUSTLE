@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  plan      String   @default("Pro Plan")
+  createdAt DateTime @default(now())
+
+  incomeSources IncomeSource[]
+  transactions  Transaction[]
+  plaidConnections PlaidConnection[]
+  form1098T        Form1098T?
+  form1098E        Form1098E?
+  homeOffice       HomeOfficeDeduction?
+}
+
+model IncomeSource {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   // "Freelance", "Delivery", "Other"
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  
+  transactions Transaction[]
+}
+
+model Transaction {
+  id             String       @id @default(cuid())
+  amount         Float
+  type           String       // "Income", "Expense"
+  date           DateTime
+  description    String?
+  taxDeductible  Boolean      @default(false)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  incomeSourceId String?
+  incomeSource   IncomeSource? @relation(fields: [incomeSourceId], references: [id])
+}
+
+model PlaidConnection {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  accessToken String
+  itemId      String
+  cursor      String?  // Used by Plaid to track sync state
+  createdAt   DateTime @default(now())
+}
+
+model Form1098T {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  box1      Float    // Tuition & Related Expenses
+  box5      Float    // Scholarships & Grants
+  createdAt DateTime @default(now())
+}
+
+model Form1098E {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  box1      Float    // Student Loan Interest Paid
+  createdAt DateTime @default(now())
+}
+
+model HomeOfficeDeduction {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  totalSqFt       Float
+  officeSqFt      Float
+  rentAmount      Float
+  utilitiesAmount Float
+  createdAt       DateTime @default(now())
+}
+

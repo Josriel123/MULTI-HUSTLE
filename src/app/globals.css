@@ -1,26 +1,174 @@
-@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg-primary: #000000;
+  --bg-secondary: #0f0f0f;
+  --bg-card: #1c1c1e;
+  --text-primary: #ffffff;
+  --text-secondary: #8e8e93;
+  --text-muted: #636366;
+  
+  --accent-green: #00c805; /* Robinhood Green */
+  --accent-green-dim: rgba(0, 200, 5, 0.15);
+  
+  --accent-red: #ff5000;
+  --accent-blue: #00c8e6;
+  
+  --border-color: #333336;
+  --border-radius: 12px;
+  
+  --font-sans: 'Outfit', sans-serif;
+  --transition-smooth: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+  transition: var(--transition-smooth);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* Base Layout Classes */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 260px;
+  border-right: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1;
+  background-color: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  height: 70px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  padding: 0 2rem;
+  background-color: var(--bg-secondary);
+  justify-content: space-between;
+}
+
+.content-area {
+  padding: 2rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.card {
+  background-color: var(--bg-card);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transition: var(--transition-smooth);
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  border-color: #48484a;
+}
+
+/* Animations */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Utilities */
+.text-green { color: var(--accent-green); }
+.text-red { color: var(--accent-red); }
+.text-secondary { color: var(--text-secondary); }
+.flex-item-center { display: flex; align-items: center; }
+
+/* --- CPA EXPORTER PRINT CSS --- */
+@media print {
+  :root {
+    --bg-primary: white !important;
+    --bg-secondary: #f5f5f5 !important;
+    --bg-card: white !important;
+    --text-primary: #000 !important;
+    --text-secondary: #555 !important;
+    --text-muted: #777 !important;
+    --accent-green: #000 !important;
+    --accent-green-dim: transparent !important;
+    --accent-red: #c00 !important;
+    --border-color: #ccc !important;
+  }
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+  .app-container {
+    display: block !important;
+    background-color: white !important;
+  }
+  .sidebar, header, .print-hide {
+    display: none !important;
+  }
+  .main-content {
+    background-color: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .content-area {
+    padding: 0.5rem !important;
+  }
+  .card {
+    background-color: white !important;
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+    color: black !important;
+    break-inside: avoid;
+    margin-bottom: 20px;
+  }
+  .card:hover {
+    transform: none !important;
+  }
+  h1, h2, h3, h4, h5, h6, p, span, div, strong {
+    color: black !important;
+  }
+  * {
+    color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+  }
 }
