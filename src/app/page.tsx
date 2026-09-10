@@ -158,7 +158,7 @@ export default function Dashboard() {
       </div>
 
       {/* Source Breakdown */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }} className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', animationDelay: '0.2s' }} className="animate-slide-up">
         
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>

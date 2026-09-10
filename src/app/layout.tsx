@@ -16,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider afterSignOutUrl="/">
       <html lang="en" suppressHydrationWarning>
       <body>
         <div className="app-container">
@@ -60,7 +60,7 @@ export default function RootLayout({
                     <div style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-primary)' }}>Logged In</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--accent-green)' }}>Pro Plan</div>
                   </div>
-                  <UserButton afterSignOutUrl="/" />
+                  <UserButton />
                 </Show>
               </div>
             </header>

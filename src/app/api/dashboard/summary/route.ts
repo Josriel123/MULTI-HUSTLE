@@ -28,7 +28,7 @@ export async function GET() {
     const income = transactions.filter(t => {
       if (t.type !== 'Income') return false;
       
-      const desc = t.description.toLowerCase();
+      const desc = (t.description ?? '').toLowerCase();
       const isAcademicRefund = desc.includes('university') || desc.includes('college') || desc.includes('financial aid') || desc.includes('bursar') || desc.includes('scholarship');
       
       // Sweep Loan Disbursements out of Gross Income
@@ -71,7 +71,10 @@ export async function GET() {
     
     if (userRecord?.form1098T && userRecord.form1098T.box5 > userRecord.form1098T.box1) {
       textbookDeductions = expenses
-        .filter(t => t.description.toLowerCase().includes('bookstore') || t.description.toLowerCase().includes('chegg') || t.description.toLowerCase().includes('textbook') || t.description.toLowerCase().includes('amazon'))
+        .filter(t => {
+          const desc = (t.description ?? '').toLowerCase();
+          return desc.includes('bookstore') || desc.includes('chegg') || desc.includes('textbook') || desc.includes('amazon');
+        })
         .reduce((sum, t) => sum + t.amount, 0);
       
       taxableScholarships = Math.max(0, (userRecord.form1098T.box5 - userRecord.form1098T.box1) - textbookDeductions);
