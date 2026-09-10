@@ -35,7 +35,7 @@ Neon needs **two** connection strings: `DATABASE_URL` (pooled, hostname has `-po
 |---|---|---|---|
 | 0 — Boot | Opus 5 | Install, security patches, green build, Neon connected | **Done** |
 | 1 — Stop the bleeding | Opus 5 | User bootstrap, Plaid consolidation, idempotent sync, token encryption, auth gating | **Done** |
-| 2 — Tax engine | Fable 5.1 writes → Astra audits | `src/lib/tax/`, plus `Float` → `Decimal` migration | **Built** on `phase-2-tax-engine`; awaiting Astra's audit and the Neon branch migration run |
+| 2 — Tax engine | Fable 5.1 writes → Astra audits | `src/lib/tax/`, plus `Float` → `Decimal` migration | **Built** on `phase-2-tax-engine`; migrations **applied to main** 2026-09-09 (26 transactions verified intact); awaiting Astra's audit and merge |
 | 3 — Real data | Gemini 3.8 Flash | Real chart aggregation, mileage as logged entry, transaction edit/delete | Blocked on 2 |
 | 4 — Design | Fable 5.1 designs → Gemini converts | Enable Tailwind, component set, kill inline styles, responsive | Blocked on 2 |
 | 5 — E2E + ship | Astra drives → Opus 5 integrates | Browser-driven verification, PDF export, Vercel | Blocked on all |
@@ -93,4 +93,5 @@ Still open:
 - Two component directories: `src/app/components/` and `src/components/`. (Phase 4)
 - An orphaned demo user (cuid id, 4 transactions) left over from the old seed script — invisible to the app, safe to delete.
 - Stale `dev.db` / `prisma/dev.db` still tracked in git.
+- **Form1098T, Form1098E and HomeOfficeDeduction have no tax year.** The estimate applies them to whichever year is requested, so a 2025 summary shows the same scholarship as 2026. Add a `taxYear` column (one row per user per year) when Phase 3 touches those forms. (Phase 3)
 - `GET /api/transactions` now serialises `amount` as a decimal string (Prisma.Decimal → JSON). The pages coerce it fine via `Intl.NumberFormat`; Phase 3 should decide whether the API returns numbers. Pages still duplicate engine arithmetic locally (`student/page.tsx` assumes 12%, `office/page.tsx` assumes 27.3%); Phase 4 should read `estimate` instead. (Phases 3–4)

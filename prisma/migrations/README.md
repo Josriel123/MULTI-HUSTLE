@@ -9,11 +9,20 @@ and after Phase 2, so the SQL is reviewable rather than implied by `db push`.
 | `20260909000100_money_decimal` | `ALTER COLUMN ... SET DATA TYPE DECIMAL(12,2)` on the eight `Float` columns across `Transaction`, `Form1098T`, `Form1098E`, `HomeOfficeDeduction`. Nothing else. |
 | `20260909000200_tax_profile_and_category` | Additive: `User.filingStatus TEXT NOT NULL DEFAULT 'single'`, `User.claimedAsDependent BOOLEAN NOT NULL DEFAULT false`, `Transaction.category TEXT NULL`. |
 
-## Applying to the existing database (created with `db push`)
+## Status
 
-The existing database already has the baseline tables, so tell Prisma the
-baseline is applied and then deploy the rest. Run against a Neon **branch**
-first, then main.
+Applied to the main Neon database on 2026-09-09 (baseline resolved, then
+`migrate deploy`). Before and after: 26 transactions summing to 50,752.38, one
+Form 1098-T, one home office row, two users, all unchanged; the eight money
+columns are `numeric(12,2)` and the three new columns carry their defaults.
+`npx prisma migrate status` reports "Database schema is up to date". From here
+on, schema changes go through `prisma migrate` so `_prisma_migrations` stays
+in step; `db push` would leave it behind.
+
+## Applying to another existing database (created with `db push`)
+
+Such a database already has the baseline tables, so tell Prisma the baseline
+is applied and then deploy the rest.
 
 ```bash
 npx prisma migrate resolve --applied 20260909000000_init
