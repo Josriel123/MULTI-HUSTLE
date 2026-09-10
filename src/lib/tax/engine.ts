@@ -28,7 +28,7 @@ import { isFilingStatus, type Citation, type FilingStatus, type Line, type Warni
  *   Form 1040 line 16    tax (rate tables)
  *   Schedule 2           self-employment tax (4), Additional Medicare Tax (11)
  *   Form 1040 line 24    total tax
- *   Form 1040 line 33    payments (withholding, estimated payments)
+ *   Form 1040 line 33    payments (withholding, Additional Medicare withholding, estimated payments)
  *   Form 1040 line 37/34 amount owed or overpaid
  */
 
@@ -37,10 +37,23 @@ export interface W2Input {
   wages: MoneyInput;
   /** Box 3. */
   socialSecurityWages: MoneyInput;
+  /** Box 7. Schedule SE line 8a is boxes 3 and 7 together. Default 0. */
+  socialSecurityTips?: MoneyInput;
   /** Box 5. */
   medicareWages: MoneyInput;
   /** Box 2. */
   federalIncomeTaxWithheld?: MoneyInput;
+  /** Box 6. The part above 1.45% of box 5 is Additional Medicare Tax withholding, credited on Form 1040 line 25c (Form 8959 Part V). Default 0. */
+  medicareTaxWithheld?: MoneyInput;
+  /**
+   * Joint returns only: true when this W-2 belongs to the person with the
+   * business. Schedule SE is per individual, so a spouse's wages never reduce
+   * the self-employed spouse's Social Security base. When a joint return does
+   * not set this to true the wages are kept out of Schedule SE line 8a (an
+   * overstatement, not an understatement) and a warning is raised. Ignored for
+   * other filing statuses, where the W-2 can only be the taxpayer's.
+   */
+  ownedByTaxpayer?: boolean;
 }
 
 export interface FederalTaxInput {
@@ -48,6 +61,8 @@ export interface FederalTaxInput {
   filingStatus: FilingStatus;
   /** Someone else can claim this taxpayer as a dependent (IRC §63(c)(5), §221(c)). Default false. */
   claimedAsDependent?: boolean;
+  /** Married filing separately only: the spouse itemizes, so no standard deduction is allowed (IRC §63(c)(6)(A)). Default false. */
+  spouseItemizes?: boolean;
   scheduleC: ScheduleCInput;
   /** Schedule 1 line 8z: taxable income that is neither wages nor business income. */
   otherIncome?: MoneyInput;
@@ -104,7 +119,11 @@ export interface FederalTaxEstimate {
   /** Form 1040 line 24. */
   totalTax: Money;
   payments: {
+    /** Form 1040 line 25a (W-2 box 2). */
     withholding: Money;
+    /** Form 1040 line 25c: W-2 box 6 above 1.45% of box 5 (Form 8959 lines 19-24). */
+    additionalMedicareWithheld: Money;
+    /** Form 1040 line 26. */
     estimatedPayments: Money;
     /** Form 1040 line 33. */
     total: Money;
@@ -139,9 +158,19 @@ const ENGINE_CITATIONS: Record<string, Citation> = {
     note: '0.9% of Medicare wages over the filing-status threshold ($250,000 joint, $125,000 separate, $200,000 other).',
   },
   kiddie: {
-    label: 'IRC §1(g); Form 8615',
+    label: 'IRC §1(g); Form 8615 instructions (2025), Who Must File',
     url: 'https://www.irs.gov/instructions/i8615',
-    note: 'Tax on a child\'s unearned income above twice the §1(g)(4)(A)(ii)(I) amount may be computed at the parent\'s rate. Taxable scholarships not reported on a W-2 are unearned income for this purpose.',
+    note: 'Form 8615 is required when the child had more than $2,700 (2025) of unearned income, must file, was under 18 (or 18, or a full-time student 19-23, with earned income not more than half their support), had a living parent, and does not file jointly. "These rules apply whether or not the child is a dependent." Unearned income includes "taxable scholarship and fellowship grants not reported on Form W-2".',
+  },
+  additionalMedicareWithholding: {
+    label: 'Form 8959 Part V (lines 19-24); Form 1040 line 25c',
+    url: 'https://www.irs.gov/instructions/i8959',
+    note: 'Line 19: Medicare tax withheld from W-2 box 6. Line 21: Medicare wages x 1.45%. Line 22: the excess is Additional Medicare Tax withholding. Line 24: "include this amount on line 25c combined with your federal income tax withholding."',
+  },
+  jointReturnScheduleSE: {
+    label: '2025 Instructions for Schedule SE, Joint Returns; Form 8959 instructions, Part I line 1',
+    url: 'https://www.irs.gov/instructions/i1040sse',
+    note: 'Schedule SE is filed per self-employed individual; a spouse\'s W-2 wages do not reduce the other spouse\'s Social Security base. Form 8959, by contrast, is per return: "If you are filing a joint return, also include your spouse\'s wages and tips."',
   },
 };
 
@@ -156,7 +185,7 @@ export function estimateFederalTax(input: FederalTaxInput): FederalTaxEstimate {
   const citations: Citation[] = [ENGINE_CITATIONS.form1040, ...params.sources];
   const assumptions: string[] = [
     `Filing status ${filingStatus.replace(/_/g, ' ')} and tax year ${params.taxYear} parameters are applied to the full year.`,
-    'All business activity is treated as one Schedule C sole proprietorship (the totals are the same as filing several).',
+    'All business activity is combined into one Schedule C. The home office income limit (IRC §280A(c)(5)) is therefore applied to the combined profit; if the office serves only one of several businesses, the real limit is that business\'s own profit and this estimate can overstate the deduction.',
     'Tax is computed with the exact §1(j)(2) bracket formula. The Tax Table used for taxable income under $100,000 rounds income to $50 bands and can differ by up to about $5.',
     'Amounts are rounded to the cent at each form line; the IRS permits rounding to whole dollars, so a filed return may differ by cents.',
     'No tax credits are claimed (see "not modeled").',
@@ -167,6 +196,24 @@ export function estimateFederalTax(input: FederalTaxInput): FederalTaxEstimate {
   const wages = w2 ? nonNegativeMoney(w2.wages, 'w2.wages') : ZERO;
   const medicareWages = w2 ? nonNegativeMoney(w2.medicareWages, 'w2.medicareWages') : ZERO;
   const withholding = w2?.federalIncomeTaxWithheld === undefined ? ZERO : nonNegativeMoney(w2.federalIncomeTaxWithheld, 'w2.federalIncomeTaxWithheld');
+  const medicareTaxWithheld = w2?.medicareTaxWithheld === undefined ? ZERO : nonNegativeMoney(w2.medicareTaxWithheld, 'w2.medicareTaxWithheld');
+
+  // Schedule SE is per individual. On a joint return the W-2 may be the other
+  // spouse's, in which case it must not reduce this person's Social Security
+  // base. Unless the caller confirms ownership, leave it out (which can only
+  // overstate SE tax) and say so. Form 8959 is per return, so Medicare wages
+  // are always applied to the Additional Medicare threshold.
+  const jointReturn = filingStatus === 'married_filing_jointly';
+  const w2OwnerConfirmed = !jointReturn || w2?.ownedByTaxpayer === true;
+  if (w2 && !w2OwnerConfirmed) {
+    const ssTotal = nonNegativeMoney(w2.socialSecurityWages, 'w2.socialSecurityWages').plus(w2.socialSecurityTips === undefined ? ZERO : nonNegativeMoney(w2.socialSecurityTips, 'w2.socialSecurityTips'));
+    citations.push(ENGINE_CITATIONS.jointReturnScheduleSE);
+    warnings.push({
+      code: 'w2_owner_unconfirmed_joint',
+      message: 'On a joint return the W-2 could belong to either spouse. Its Social Security wages and tips were NOT applied against the self-employed spouse\'s wage base (Schedule SE line 8a), which may overstate self-employment tax by up to 12.4% of that amount. Mark the W-2 as the self-employed person\'s own if it is.',
+      amount: ssTotal.toFixed(2),
+    });
+  }
 
   // Schedule C.
   const scheduleC = computeScheduleC(input.scheduleC);
@@ -178,7 +225,8 @@ export function estimateFederalTax(input: FederalTaxInput): FederalTaxEstimate {
     {
       netProfit: scheduleC.netProfit,
       filingStatus,
-      w2SocialSecurityWages: w2?.socialSecurityWages,
+      w2SocialSecurityWages: w2OwnerConfirmed ? w2?.socialSecurityWages : undefined,
+      w2SocialSecurityTips: w2OwnerConfirmed ? w2?.socialSecurityTips : undefined,
       w2MedicareWages: w2?.medicareWages,
     },
     params,
@@ -194,6 +242,7 @@ export function estimateFederalTax(input: FederalTaxInput): FederalTaxEstimate {
     scholarships = computeTaxableScholarships({
       form1098T: input.scholarships.form1098T,
       requiredCourseMaterials: explicitMaterials.plus(scheduleC.qualifiedEducationExpenses),
+      restrictedToNonQualifiedExpenses: input.scholarships.restrictedToNonQualifiedExpenses,
     });
     warnings.push(...scholarships.warnings);
     assumptions.push(...scholarships.assumptions);
@@ -232,9 +281,25 @@ export function estimateFederalTax(input: FederalTaxInput): FederalTaxEstimate {
   // instructions footnote): line 1z + Schedule 1 lines 3, 6, 8r, 8t, 8u - Schedule 1 line 15.
   // Here that is wages + business net profit + taxable scholarships - half SE tax.
   const earnedIncomeForDependents = wages.plus(scheduleC.netProfit).minus(halfSE).plus(taxableScholarships);
-  const standardDeduction = computeStandardDeduction({ filingStatus, claimedAsDependent, earnedIncome: earnedIncomeForDependents }, params);
+  const standardDeduction = computeStandardDeduction(
+    { filingStatus, claimedAsDependent, earnedIncome: earnedIncomeForDependents, spouseItemizes: input.spouseItemizes ?? false },
+    params,
+  );
   citations.push(...standardDeduction.citations);
   if (claimedAsDependent) citations.push(ENGINE_CITATIONS.earnedIncomeForDependents);
+  if (standardDeduction.ineligibleReason === 'spouse_itemizes') {
+    warnings.push({
+      code: 'mfs_spouse_itemizes',
+      message: 'No standard deduction: a married person filing separately whose spouse itemizes cannot take it (IRC §63(c)(6)(A)). Itemized deductions are not modeled, so taxable income here assumes none.',
+      amount: standardDeduction.regularAmount.toFixed(2),
+    });
+  } else if (filingStatus === 'married_filing_separately' && input.spouseItemizes === undefined) {
+    warnings.push({
+      code: 'mfs_spouse_itemizes_unknown',
+      message: 'Married filing separately: the standard deduction was applied, but it is not allowed if your spouse itemizes (IRC §63(c)(6)(A)). Say whether your spouse itemizes; if so, taxable income rises by this amount.',
+      amount: standardDeduction.deduction.toFixed(2),
+    });
+  }
 
   // Form 1040 line 13.
   const taxableIncomeBeforeQbi = notBelowZero(agi.minus(standardDeduction.deduction));
@@ -244,6 +309,9 @@ export function estimateFederalTax(input: FederalTaxInput): FederalTaxEstimate {
   );
   warnings.push(...qbi.warnings);
   citations.push(...qbi.citations);
+  if (qbi.minimumDeductionApplied) {
+    assumptions.push('The §199A(i) minimum deduction of $400 assumes the taxpayer materially participates in the business (IRC §469(h)); it does not apply to a passive owner.');
+  }
 
   // Form 1040 line 15.
   const taxableIncome = notBelowZero(taxableIncomeBeforeQbi.minus(qbi.deduction));
@@ -262,19 +330,29 @@ export function estimateFederalTax(input: FederalTaxInput): FederalTaxEstimate {
   // Form 1040 line 24. Lines 17-21 (AMT, credits) are zero: not modeled.
   const totalTax = incomeTax.tax.plus(otherTaxesTotal);
 
-  // Payments.
+  // Payments. Form 8959 Part V: Medicare tax withheld (box 6) above 1.45% of
+  // Medicare wages is Additional Medicare Tax withholding, credited on line 25c.
   const estimatedPayments = input.estimatedTaxPaymentsMade === undefined ? ZERO : nonNegativeMoney(input.estimatedTaxPaymentsMade, 'estimatedTaxPaymentsMade');
-  const paymentsTotal = withholding.plus(estimatedPayments);
+  const regularMedicareOnWages = cents(times(medicareWages, SE_RATES.medicareEmployee));
+  const additionalMedicareWithheld = notBelowZero(medicareTaxWithheld.minus(regularMedicareOnWages));
+  if (isAboveZero(additionalMedicareWithheld)) citations.push(ENGINE_CITATIONS.additionalMedicareWithholding);
+  const paymentsTotal = withholding.plus(additionalMedicareWithheld).plus(estimatedPayments);
   const balanceDue = totalTax.minus(paymentsTotal);
 
-  // Kiddie tax warning: dependents with taxable scholarships above the Form 8615 threshold.
+  // Kiddie tax warning. Form 8615 turns on unearned income over twice the
+  // §1(g)(4)(A)(ii)(I) amount, age, support and a living parent, none of which
+  // depend on being claimed as a dependent ("These rules apply whether or not
+  // the child is a dependent"). Ages are unknown, so the warning is conditional.
+  // Unearned income here is everything modeled that is not pay for work:
+  // taxable scholarships (Form 8615 lists them) and other income.
   const kiddieThreshold = money(params.kiddieTax.baseAmount).times(2);
-  if (claimedAsDependent && taxableScholarships.greaterThan(kiddieThreshold)) {
+  const unearnedIncome = taxableScholarships.plus(otherIncome);
+  if (unearnedIncome.greaterThan(kiddieThreshold)) {
     citations.push(ENGINE_CITATIONS.kiddie, params.kiddieTax.citation);
     warnings.push({
       code: 'kiddie_tax_may_apply',
-      message: `Taxable scholarships exceed $${kiddieThreshold.toFixed(0)}. If the taxpayer is under 24 and a full-time student, Form 8615 may tax the excess at the parents\' rate, which this estimate does not compute.`,
-      amount: taxableScholarships.minus(kiddieThreshold).toFixed(2),
+      message: `Unearned income (taxable scholarships and other income) exceeds $${kiddieThreshold.toFixed(0)}. If you were under 18 at year end, or under 24 and a full-time student whose earned income was not more than half your support, and a parent was alive, Form 8615 taxes the excess at your parents\' rate whether or not you are their dependent. This estimate does not compute that.`,
+      amount: unearnedIncome.minus(kiddieThreshold).toFixed(2),
     });
   }
   if (scheduleC.grossReceipts.isZero() && wages.isZero() && taxableScholarships.isZero() && otherIncome.isZero()) {
@@ -305,7 +383,10 @@ export function estimateFederalTax(input: FederalTaxInput): FederalTaxEstimate {
     { ref: 'Schedule 2 line 11', label: 'Additional Medicare Tax (Form 8959 line 18)', value: additionalMedicareTax },
     { ref: 'Form 1040 line 23', label: 'Other taxes (Schedule 2 line 21)', value: otherTaxesTotal },
     { ref: 'Form 1040 line 24', label: 'Total tax', value: totalTax },
-    { ref: 'Form 1040 line 25d', label: 'Federal income tax withheld', value: withholding },
+    { ref: 'Form 1040 line 25a', label: 'Federal income tax withheld (W-2 box 2)', value: withholding },
+    { ref: 'Form 8959 line 19', label: 'Medicare tax withheld (W-2 box 6)', value: medicareTaxWithheld },
+    { ref: 'Form 8959 line 21', label: 'Medicare wages x 1.45%', value: regularMedicareOnWages },
+    { ref: 'Form 8959 line 22, to Form 1040 line 25c', label: 'Additional Medicare Tax withholding', value: additionalMedicareWithheld },
     { ref: 'Form 1040 line 26', label: 'Estimated tax payments', value: estimatedPayments },
     { ref: 'Form 1040 line 33', label: 'Total payments', value: paymentsTotal },
     { ref: isBelowZero(balanceDue) ? 'Form 1040 line 34' : 'Form 1040 line 37', label: isBelowZero(balanceDue) ? 'Overpaid' : 'Amount you owe', value: balanceDue.abs() },
@@ -327,7 +408,7 @@ export function estimateFederalTax(input: FederalTaxInput): FederalTaxEstimate {
     incomeTax,
     otherTaxes: { selfEmploymentTax: scheduleSE.selfEmploymentTax, additionalMedicareTax, total: otherTaxesTotal },
     totalTax,
-    payments: { withholding, estimatedPayments, total: paymentsTotal },
+    payments: { withholding, additionalMedicareWithheld, estimatedPayments, total: paymentsTotal },
     balanceDue,
     effectiveRate,
     lines,

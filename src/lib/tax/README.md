@@ -6,7 +6,7 @@ implements, and every function has tests with hand-worked answers in
 `__tests__/`.
 
 ```
-npm test          # vitest, 112 tests
+npm test          # vitest
 npm run typecheck # tsc --noEmit
 ```
 
@@ -30,8 +30,12 @@ Each number the engine produces comes from one of two places:
 2. **A year-specific amount**, transcribed into `parameters/2024.ts`,
    `2025.ts`, `2026.ts` as the exact digits printed in the cited Revenue
    Procedure. The rate tables also carry the "$B plus R% of the excess" base
-   amounts as printed; `__tests__/parameters.test.ts` recomputes each one from
-   the brackets, so a mistranscribed bracket boundary or base fails the build.
+   amounts as printed, and `__tests__/parameters.test.ts` recomputes each one
+   from the brackets. Because both fields come from the same transcription,
+   that check alone would miss a boundary and base copied wrongly together, so
+   `__tests__/fixtures/irsBracketsIndependent.ts` holds a second transcription
+   of every table made separately during the 2026-09-09 audit, and the test
+   compares production against it at every bracket ceiling and $1 either side.
 
 To check a figure: find its `Line` in the estimate's `lines` array (each has a
 form-line `ref`), open the module named in the table below, read the citation,
@@ -42,19 +46,19 @@ and redo the arithmetic. The test files show the arithmetic long-hand.
 | Step | Form line | Module | Authority |
 |---|---|---|---|
 | Gross receipts, expenses by category, meals at 50% | Schedule C 1-28 | `scheduleC.ts`, `categories.ts` | IRC §162(a); §274(n)(1); Schedule C instructions |
-| Home office: simplified vs. Form 8829, capped at tentative profit | Schedule C 29-30 | `homeOffice.ts` | IRC §280A(c)(1), (c)(5); Rev. Proc. 2013-13 §4.01, §4.08; Form 8829 |
+| Home office: simplified (average monthly area for part-year use) vs. Form 8829, capped at the combined tentative profit | Schedule C 29-30 | `homeOffice.ts` | IRC §280A(c)(1), (c)(5); Rev. Proc. 2013-13 §4.01, §4.08(2)-(4); Form 8829 |
 | Net profit or loss | Schedule C 31 | `scheduleC.ts` | Schedule C instructions (to Schedule 1 line 3, Schedule SE line 2) |
-| Net earnings = 92.35% of profit; $400 floor; 12.4% to the wage base + 2.9%; half deductible | Schedule SE 2-13 | `scheduleSE.ts` | IRC §1402(a)(12), (b)(1), (b)(2); §1401(a), (b)(1); §164(f) |
-| Additional Medicare Tax 0.9% over $200k/$250k/$125k | Form 8959 | `scheduleSE.ts`, `engine.ts` | IRC §1401(b)(2); §3101(b)(2) |
-| Taxable scholarships = Box 5 - Box 1 - required course materials | Schedule 1 8r | `scholarships.ts` | IRC §117(a)-(c); Pub. 970 ch. 1 |
+| Net earnings = 92.35% of profit; $400 floor; 12.4% up to the wage base less W-2 boxes 3 + 7 (own W-2 only, on a joint return) + 2.9%; half deductible | Schedule SE 2-13 | `scheduleSE.ts` | IRC §1402(a)(12), (b)(1), (b)(2); §1401(a), (b)(1); §164(f); Schedule SE line 8a |
+| Additional Medicare Tax 0.9% over $200k/$250k/$125k; box 6 withholding above 1.45% credited as a payment | Form 8959 Parts I, II, V | `scheduleSE.ts`, `engine.ts` | IRC §1401(b)(2); §3101(b)(2); Form 8959 lines 19-24 |
+| Taxable scholarships = grant amounts earmarked for non-qualified expenses + max(0, rest of Box 5 - Box 1 - required course materials) | Schedule 1 8r | `scholarships.ts` | IRC §117(a)-(c); Pub. 970 ch. 1 |
 | Total income | 1040 line 9 | `engine.ts` | Form 1040 instructions |
 | Student loan interest: $2,500 cap, MAGI phaseout, not MFS, not dependents | Schedule 1 21 | `studentLoanInterest.ts` | IRC §221(b), (c), (e)(2); Pub. 970 ch. 4 |
 | Adjusted gross income | 1040 line 11 | `engine.ts` | |
-| Standard deduction, with the dependent limit | 1040 line 12 | `standardDeduction.ts` | IRC §63(c)(2), (c)(5), (c)(7); Pub. 501; 1040 instructions worksheet |
-| QBI deduction: 20% of (profit - half SE tax), TI limit, phase-in, 2026 minimum | 1040 line 13 | `qbi.ts` | IRC §199A(a), (b)(2)-(3), (c)(2), (e)(2), (i); Form 8995 |
+| Standard deduction, with the dependent limit; zero for married filing separately when the spouse itemizes | 1040 line 12 | `standardDeduction.ts` | IRC §63(c)(2), (c)(5), (c)(6)(A), (c)(7); Pub. 501; 1040 instructions worksheet |
+| QBI deduction: 20% of (profit - half SE tax), TI limit, phase-in; from 2026 the greater of that or $400, with no taxable-income cap | 1040 line 13 | `qbi.ts` | IRC §199A(a), (b)(2)-(3), (c)(2), (e)(2), (i); Form 8995 |
 | Taxable income | 1040 line 15 | `engine.ts` | |
 | Tax from the rate tables | 1040 line 16 | `incomeTax.ts` | IRC §1(j)(2); Rev. Proc. tables |
-| Total tax = income tax + SE tax + Additional Medicare | 1040 line 24 | `engine.ts` | |
+| Total tax = income tax + SE tax + Additional Medicare; payments = box 2 + Additional Medicare withholding + estimated payments | 1040 lines 24, 25a, 25c, 26, 33 | `engine.ts` | Form 8959 Part V |
 | Standard mileage (for Phase 3's logged miles) | Schedule C 9 | `mileage.ts` | Notice 2024-08, 2025-5, 2026-10; Announcement 2026-11; Rev. Proc. 2019-46 |
 
 ## Year parameters and their sources
@@ -62,7 +66,7 @@ and redo the arithmetic. The test files show the arithmetic long-hand.
 | Year | Brackets, standard deduction, §199A, §221, kiddie | Wage base | Mileage |
 |---|---|---|---|
 | 2024 | Rev. Proc. 2023-34 (§3.01, 3.02, 3.15, 3.27, 3.30) | $168,600 (2024 Schedule SE instructions) | 67c (Notice 2024-08) |
-| 2025 | Rev. Proc. 2024-40 (§3.01, 3.02, 3.15, 3.27, 3.30), **except** the standard deduction, which Pub. L. 119-21 §70102 raised to $15,750 / $23,625 / $31,500 after the Rev. Proc. was issued (2025 Form 1040 instructions; IRC §63(c)(7)) | $176,100 (2025 Schedule SE instructions) | 70c (Notice 2025-5) |
+| 2025 | Rev. Proc. 2024-40 (§2.01, 2.02, 2.15, 2.27, 2.30; this Rev. Proc. has no "changes" section, so its items are in Section 2), **except** the standard deduction, which Pub. L. 119-21 §70102 raised to $15,750 / $23,625 / $31,500 after the Rev. Proc. was issued (Rev. Proc. 2025-32 §3.01; 2025 Form 1040 instructions; IRC §63(c)(7)) | $176,100 (2025 Schedule SE instructions) | 70c (Notice 2025-5) |
 | 2026 | Rev. Proc. 2025-32 (§4.01, 4.02, 4.14, 4.26, 4.29); first year of the $75,000 / $150,000 §199A phase-in range and the §199A(i) $400 minimum | $184,500 (IRS Tax Topic 751) | 72.5c to June 30 (Notice 2026-10), 76c from July 1 (Announcement 2026-11) |
 
 Statutory constants that do not change year to year live next to the rule that
@@ -88,8 +92,10 @@ Medicare thresholds, the $2,500 student-loan-interest cap, 20% for QBI, $5 and
 The 1098-T handling (taxable = Box 5 - Box 1 - required books/supplies) was
 roughly right in shape and is kept, now with its assumptions stated
 (`scholarships.ts`): Box 1 is treated as the tuition the scholarship covered,
-the student is a degree candidate with no service requirement, and only
-materials tagged as required for courses count. The excess is Schedule 1 line
+the student is a degree candidate with no service requirement, only materials
+tagged as required for courses count, and any part of the grant earmarked for
+room and board (`restrictedToNonQualifiedExpenses`) is taxable regardless of
+tuition paid. The excess is Schedule 1 line
 8r income, never self-employment income, and it counts as earned income for a
 dependent's standard deduction (Pub. 501; 1040 instructions footnote).
 
@@ -127,8 +133,9 @@ is deductible only if the user marked it `taxDeductible`.
 
 ## Not modeled
 
-`disclaimer.ts` lists every rule the engine leaves out; the list is returned in
-every estimate as `notModeled`. The largest for this app's users: tax credits
+`disclaimer.ts` lists the rules the engine is known to leave out; the list is
+returned in every estimate as `notModeled`. It is maintained, not exhaustive: a
+rule missing from it is not thereby modeled. The largest for this app's users: tax credits
 (EITC, child tax credit, education credits), which can reduce the real
 liability well below the estimate; W-2 wages unless supplied; depreciation;
 the self-employed health insurance deduction; the kiddie tax (a warning is
@@ -143,6 +150,35 @@ form order, `warnings` (things that changed or limited the number), `assumptions
 disclaimer is part of the output on purpose: nothing can display a liability
 figure from this engine without also receiving the text that qualifies it.
 Phase 4 must render `disclaimer` next to every liability figure.
+
+## Independent audit (2026-09-09) and the input contract it extended
+
+`docs/audits/federal-tax-2026-09-09/` holds a cold audit of this engine
+(REPORT.md), the decision taken on each finding (TRIAGE.md), and executable
+counterexamples. The fix-category counterexamples were ported to
+`__tests__/audit-2026-09-09.test.ts` before the fixes and failed first. The
+fixes extended the input contract with optional fields:
+
+| Field | Rule |
+|---|---|
+| `w2.socialSecurityTips` (box 7) | Schedule SE line 8a is boxes 3 + 7 |
+| `w2.medicareTaxWithheld` (box 6) | Form 8959 Part V: the part above 1.45% of box 5 is a payment (Form 1040 line 25c) |
+| `w2.ownedByTaxpayer` (joint returns) | Schedule SE is per individual; an unconfirmed W-2 on a joint return is kept out of line 8a and a warning is raised |
+| `spouseItemizes` (married filing separately) | No standard deduction, IRC §63(c)(6)(A) |
+| `scholarships.restrictedToNonQualifiedExpenses` | Earmarked grant amounts are taxable regardless of tuition paid, Pub. 970 ch. 1 |
+| `homeOffice.monthsUsed` (existing) | Now also prorates the simplified method by average monthly area, Rev. Proc. 2013-13 §4.08(4) |
+
+Two findings are documented rather than fixed (TRIAGE.md): the home office
+income limit is applied to combined profit, not per business (warning
+`home_office_multiple_businesses`, `NOT_MODELED`), and a refund deposit does
+not reduce the expense it reverses (warning `refund_not_netted`,
+`NOT_MODELED`). The §199A(i) minimum, which this engine had capped at taxable
+income, is now the statutory greater-of with no cap.
+
+None of the new fields has a database column yet; the adapter passes them
+through when a row carries them (`UserTaxProfileRow.spouseItemizes`,
+`Form1098TRow.restrictedToNonQualifiedExpenses`), and the W-2 fields wait for
+a W-2 form in the app.
 
 ## Adding a tax year
 

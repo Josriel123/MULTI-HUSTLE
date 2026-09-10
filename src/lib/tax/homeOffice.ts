@@ -10,7 +10,9 @@ import type { Citation, Line, Warning } from './types';
  *    actual costs. For a renter that is rent and utilities, both "indirect"
  *    expenses on Form 8829 lines 18–19 column (b) apportioned by line 7.
  *  - Simplified method (Rev. Proc. 2013-13): $5 per square foot of office,
- *    up to 300 square feet, so at most $1,500.
+ *    up to 300 square feet, so at most $1,500. For part-year use the area is
+ *    the average of the monthly allowable areas (§4.08(4)), so six qualifying
+ *    months of a 300 sq ft office is 150 sq ft, or $750.
  *
  * Both are capped by the gross income limitation: the deduction cannot exceed
  * the business's gross income less its other expenses (IRC §280A(c)(5);
@@ -30,7 +32,7 @@ export interface HomeOfficeInput {
   monthlyRent: MoneyInput;
   /** Monthly utilities (electric, gas, water, internet, etc.). */
   monthlyUtilities: MoneyInput;
-  /** Months in the tax year the office was used. Defaults to 12. */
+  /** Months in the tax year with 15 or more days of qualified use (Rev. Proc. 2013-13 §4.08(4)). Defaults to 12. */
   monthsUsed?: number;
 }
 
@@ -41,6 +43,9 @@ export interface HomeOfficeResult {
   /** The cap both methods are measured against: Schedule C line 29 (tentative profit), not below zero. */
   grossIncomeLimit: Money;
   simplified: {
+    /** Office area capped at 300 sq ft (Rev. Proc. 2013-13 §4.01(2)). */
+    cappedSquareFeet: Money;
+    /** Average monthly allowable area: capped area x monthsUsed / 12 (§4.08(4)). Equals `cappedSquareFeet` for a full year. */
     allowableSquareFeet: Money;
     ratePerSquareFoot: Money;
     beforeLimit: Money;
@@ -87,6 +92,11 @@ export const HOME_OFFICE_CITATIONS: Record<string, Citation> = {
     url: 'https://www.irs.gov/irb/2013-06_IRB',
     note: 'Safe-harbor deduction "cannot exceed the gross income derived from the qualified business use of the home ... reduced by the business deductions" unrelated to the home; no carryover of a disallowed amount.',
   },
+  simplifiedPartYear: {
+    label: 'Rev. Proc. 2013-13 §4.08(4); Pub. 587, "Part-year use or area changes"',
+    url: 'https://www.irs.gov/irb/2013-06_IRB',
+    note: 'A taxpayer with a qualified business use "for a portion of the taxable year ... must determine the average of the monthly allowable square footage for the taxable year"; "no more than 300 square feet may be taken into account for any one month, and a taxpayer shall only be treated as having a qualified business use of a home in a month in which the taxpayer had 15 or more days of a qualified business use."',
+  },
   pub587: {
     label: 'Pub. 587 (2025), Business Use of Your Home',
     url: 'https://www.irs.gov/publications/p587',
@@ -126,9 +136,15 @@ export function computeHomeOffice(input: HomeOfficeInput, tentativeProfit: Money
   const grossIncomeLimit = notBelowZero(money(tentativeProfit, 'tentativeProfit'));
 
   // --- Simplified method (Rev. Proc. 2013-13) ---
-  const allowableSqFt = min(officeSqFt, money(SIMPLIFIED_MAX_SQFT));
+  // §4.01(2): allowable area is the office, capped at 300 sq ft. §4.08(4): for
+  // part-year use the allowable area is the AVERAGE of the twelve monthly
+  // allowable areas (each month capped at 300; a month counts only with 15 or
+  // more days of qualified use). So `monthsUsed` scales the area, not the rate.
+  const cappedSqFt = min(officeSqFt, money(SIMPLIFIED_MAX_SQFT));
+  const allowableSqFt = cappedSqFt.times(monthsUsed).dividedBy(12);
   const simplifiedBefore = cents(times(allowableSqFt, SIMPLIFIED_RATE_PER_SQFT));
   const simplifiedAllowed = min(simplifiedBefore, grossIncomeLimit);
+  if (monthsUsed < 12) citations.push(HOME_OFFICE_CITATIONS.simplifiedPartYear);
 
   // --- Regular method (Form 8829) ---
   // Line 7: business percentage. A home with no recorded area cannot support a percentage.
@@ -176,7 +192,7 @@ export function computeHomeOffice(input: HomeOfficeInput, tentativeProfit: Money
     { ref: 'Form 8829 regular method', label: 'Business share of home costs before limit', value: regularBefore },
     { ref: 'Form 8829 line 36 (allowable)', label: 'Regular method allowed', value: regularAllowed },
     { ref: 'Form 8829 line 43', label: 'Regular method carryover to next year', value: regularCarryover },
-    { ref: 'Schedule C line 30 worksheet', label: `Simplified: ${allowableSqFt} sq ft x $${SIMPLIFIED_RATE_PER_SQFT}`, value: simplifiedBefore },
+    { ref: 'Schedule C line 30 worksheet', label: `Simplified: ${allowableSqFt.toFixed(2)} sq ft (average monthly allowable, ${monthsUsed} of 12 months) x $${SIMPLIFIED_RATE_PER_SQFT}`, value: simplifiedBefore },
     { ref: 'Schedule C line 30 worksheet', label: 'Simplified method allowed', value: simplifiedAllowed },
     { ref: 'Schedule C line 30', label: `Home office deduction (${method})`, value: deduction },
   ];
@@ -186,6 +202,7 @@ export function computeHomeOffice(input: HomeOfficeInput, tentativeProfit: Money
     deduction,
     grossIncomeLimit,
     simplified: {
+      cappedSquareFeet: cappedSqFt,
       allowableSquareFeet: allowableSqFt,
       ratePerSquareFoot: money(SIMPLIFIED_RATE_PER_SQFT),
       beforeLimit: simplifiedBefore,

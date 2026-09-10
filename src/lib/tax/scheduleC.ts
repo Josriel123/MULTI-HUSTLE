@@ -6,9 +6,12 @@ import type { Citation, Line, Warning } from './types';
 /**
  * Schedule C (Form 1040), Profit or Loss From Business: one aggregated sole
  * proprietorship. Multiple gigs are combined. A taxpayer with several
- * activities files a Schedule C per business, but the totals that reach
- * Schedule 1 line 3 and Schedule SE line 2 are the sum, and this engine
- * estimates the total, not the per-form paperwork.
+ * activities files a Schedule C per business; summing already-correct per-form
+ * net profits gives the right Schedule 1 line 3 and Schedule SE line 2, but
+ * combining BEFORE the home office step does not: the §280A(c)(5) income limit
+ * belongs to the business that uses the office (Pub. 587, "More Than One Trade
+ * or Business"), and applying it to the combined profit can overstate the
+ * deduction. That is documented in NOT_MODELED and warned about by the adapter.
  *
  * Lines used (2025 form):
  *   1/7   Gross receipts (no returns, cost of goods sold, or other income modeled)

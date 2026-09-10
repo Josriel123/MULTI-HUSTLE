@@ -53,7 +53,7 @@ describe('computeQbiDeduction', () => {
     expect(r.warnings.map((w) => w.code)).toContain('qbi_loss_carryforward');
   });
 
-  it('2026: the §199A(i) minimum of $400 applies with at least $1,000 of QBI, never exceeding taxable income', () => {
+  it('2026: the §199A(i) minimum is the greater of the ordinary deduction or $400, with at least $1,000 of QBI and no taxable-income cap', () => {
     // QBI 1,000 -> 20% = 200 -> lifted to 400
     const min = computeQbiDeduction({ netProfit: '1000', deductibleHalfSelfEmploymentTax: '0', taxableIncomeBeforeQbi: '5000', filingStatus: 'single' }, P2026);
     expectMoney(min.deduction, '400.00');
@@ -62,8 +62,12 @@ describe('computeQbiDeduction', () => {
     const under = computeQbiDeduction({ netProfit: '999.99', deductibleHalfSelfEmploymentTax: '0', taxableIncomeBeforeQbi: '5000', filingStatus: 'single' }, P2026);
     expectMoney(under.deduction, '200.00');
     expect(under.minimumDeductionApplied).toBe(false);
-    // Taxable income only 300: the minimum cannot exceed it
-    expectMoney(computeQbiDeduction({ netProfit: '1000', deductibleHalfSelfEmploymentTax: '0', taxableIncomeBeforeQbi: '300', filingStatus: 'single' }, P2026).deduction, '300.00');
+    // Taxable income only 300, or even 0: the statute says "the greater of ... or $400" with no cap
+    // (§199A(i)(1); draft 2026 Form 8995 line 17). Taxable income floors at zero in the engine instead.
+    expectMoney(computeQbiDeduction({ netProfit: '1000', deductibleHalfSelfEmploymentTax: '0', taxableIncomeBeforeQbi: '300', filingStatus: 'single' }, P2026).deduction, '400.00');
+    expectMoney(computeQbiDeduction({ netProfit: '1000', deductibleHalfSelfEmploymentTax: '0', taxableIncomeBeforeQbi: '0', filingStatus: 'single' }, P2026).deduction, '400.00');
+    // The ordinary deduction wins when it is larger
+    expectMoney(computeQbiDeduction({ netProfit: '5000', deductibleHalfSelfEmploymentTax: '0', taxableIncomeBeforeQbi: '50000', filingStatus: 'single' }, P2026).deduction, '1000.00');
     // 2025 has no minimum
     expectMoney(computeQbiDeduction({ netProfit: '1000', deductibleHalfSelfEmploymentTax: '0', taxableIncomeBeforeQbi: '5000', filingStatus: 'single' }, P2025).deduction, '200.00');
   });

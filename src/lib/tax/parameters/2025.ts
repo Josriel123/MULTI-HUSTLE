@@ -7,13 +7,19 @@ import type { TaxYearParameters } from './types';
  * Primary source: Rev. Proc. 2024-40, 2024-45 I.R.B. 1100 (Oct. 22, 2024),
  * "inflation adjusted items for 2025". Section numbers below refer to it.
  *
- * One item in Rev. Proc. 2024-40 was superseded by statute: §3.15 listed the
+ * One item in Rev. Proc. 2024-40 was superseded by statute: §2.15(1) listed the
  * 2025 standard deduction as $30,000 / $22,500 / $15,000. Public Law 119-21
  * (July 4, 2025), §70102, amended IRC §63(c)(7) to $31,500 / $23,625 / $15,750
  * for taxable years beginning after December 31, 2024. The 2025 Form 1040
  * instructions and IRS newsroom release IR-2025-103 carry the amended amounts,
- * and those are used here. The dependent amounts ($1,350 / $450) were not
- * changed.
+ * and those are used here; Rev. Proc. 2025-32 §3.01 formally removed §2.15(1)
+ * and restated the amended amounts. The dependent amounts ($1,350 / $450) were
+ * not changed.
+ *
+ * Section numbering: Rev. Proc. 2024-40 has no "changes" section, so its
+ * adjusted items are SECTION 2 (the 2024 and 2026 Rev. Procs. use Sections 3
+ * and 4). An earlier version of this file cited §3.xx; the 2026-09-09 audit
+ * caught it.
  */
 
 const REV_PROC: Citation = {
@@ -30,6 +36,11 @@ export const PARAMETERS_2025: TaxYearParameters = {
       label: 'IRC §63(c)(7) as amended by Pub. L. 119-21 §70102; 2025 Instructions for Form 1040, Standard Deduction Chart',
       url: 'https://www.irs.gov/instructions/i1040gi',
       note: 'Standard deduction for 2025: $15,750 single or married filing separately; $31,500 married filing jointly or qualifying surviving spouse; $23,625 head of household.',
+    },
+    {
+      label: 'Rev. Proc. 2025-32 §3.01, "Removal of Section 2.15(1) of Rev. Proc. 2024-40"',
+      url: 'https://www.irs.gov/irb/2025-45_IRB',
+      note: '"Section 63(c)(7) as amended by the OBBBA provides the standard deduction amounts under § 63(c)(2) for any taxable year beginning in 2025 as follows: ... $31,500 ... $23,625 ... $15,750 ... $15,750. Accordingly, section 2.15(1) of Rev. Proc. 2024-40 is removed."',
     },
     {
       label: 'IRS newsroom, "IRS releases tax inflation adjustments for tax year 2026, including amendments from the One, Big, Beautiful Bill"',
@@ -55,7 +66,7 @@ export const PARAMETERS_2025: TaxYearParameters = {
 
   incomeTaxBrackets: {
     joint: {
-      citation: { ...REV_PROC, label: 'Rev. Proc. 2024-40 §3.01, Table 1 (Married Individuals Filing Joint Returns and Surviving Spouses)' },
+      citation: { ...REV_PROC, label: 'Rev. Proc. 2024-40 §2.01, Table 1 (Married Individuals Filing Joint Returns and Surviving Spouses)' },
       rows: [
         { upTo: '23850', rate: '0.10' },
         { upTo: '96950', rate: '0.12', taxAtLowerBoundAsPrinted: '2385' },
@@ -67,7 +78,7 @@ export const PARAMETERS_2025: TaxYearParameters = {
       ],
     },
     head_of_household: {
-      citation: { ...REV_PROC, label: 'Rev. Proc. 2024-40 §3.01, Table 2 (Heads of Households)' },
+      citation: { ...REV_PROC, label: 'Rev. Proc. 2024-40 §2.01, Table 2 (Heads of Households)' },
       rows: [
         { upTo: '17000', rate: '0.10' },
         { upTo: '64850', rate: '0.12', taxAtLowerBoundAsPrinted: '1700' },
@@ -79,7 +90,7 @@ export const PARAMETERS_2025: TaxYearParameters = {
       ],
     },
     single: {
-      citation: { ...REV_PROC, label: 'Rev. Proc. 2024-40 §3.01, Table 3 (Unmarried Individuals other than Surviving Spouses and Heads of Households)' },
+      citation: { ...REV_PROC, label: 'Rev. Proc. 2024-40 §2.01, Table 3 (Unmarried Individuals other than Surviving Spouses and Heads of Households)' },
       rows: [
         { upTo: '11925', rate: '0.10' },
         { upTo: '48475', rate: '0.12', taxAtLowerBoundAsPrinted: '1192.50' },
@@ -91,7 +102,7 @@ export const PARAMETERS_2025: TaxYearParameters = {
       ],
     },
     married_filing_separately: {
-      citation: { ...REV_PROC, label: 'Rev. Proc. 2024-40 §3.01, Table 4 (Married Individuals Filing Separate Returns)' },
+      citation: { ...REV_PROC, label: 'Rev. Proc. 2024-40 §2.01, Table 4 (Married Individuals Filing Separate Returns)' },
       rows: [
         { upTo: '11925', rate: '0.10' },
         { upTo: '48475', rate: '0.12', taxAtLowerBoundAsPrinted: '1192.50' },
@@ -115,9 +126,9 @@ export const PARAMETERS_2025: TaxYearParameters = {
     dependentFloor: '1350',
     dependentEarnedIncomeAddOn: '450',
     citation: {
-      label: 'IRC §63(c)(7) as amended by Pub. L. 119-21 §70102 (amounts); Rev. Proc. 2024-40 §3.15(2) (dependent floor and add-on)',
+      label: 'IRC §63(c)(7) as amended by Pub. L. 119-21 §70102 (amounts); Rev. Proc. 2024-40 §2.15(2) (dependent floor and add-on)',
       url: 'https://www.law.cornell.edu/uscode/text/26/63',
-      note: '$31,500 joint/surviving spouse, $23,625 head of household, $15,750 unmarried and married filing separately (supersedes the $30,000 / $22,500 / $15,000 in Rev. Proc. 2024-40 §3.15(1)). Dependent: "cannot exceed the greater of (1) $1,350, or (2) the sum of $450 and the individual\'s earned income."',
+      note: '$31,500 joint/surviving spouse, $23,625 head of household, $15,750 unmarried and married filing separately (supersedes the $30,000 / $22,500 / $15,000 in Rev. Proc. 2024-40 §2.15(1)). Dependent: "cannot exceed the greater of (1) $1,350, or (2) the sum of $450 and the individual\'s earned income."',
     },
   },
 
@@ -136,7 +147,7 @@ export const PARAMETERS_2025: TaxYearParameters = {
     minimumDeduction: null,
     citation: {
       ...REV_PROC,
-      label: 'Rev. Proc. 2024-40 §3.27 (Qualified Business Income); 2025 Instructions for Form 8995',
+      label: 'Rev. Proc. 2024-40 §2.27 (Qualified Business Income); 2025 Instructions for Form 8995',
       note: 'Threshold amounts: $394,600 joint; $197,300 separate and all other returns. Phase-in range $100,000 / $50,000 (IRC §199A(b)(3)(B)(ii) as in effect for taxable years beginning before 2026).',
     },
   },
@@ -148,7 +159,7 @@ export const PARAMETERS_2025: TaxYearParameters = {
     },
     citation: {
       ...REV_PROC,
-      label: 'Rev. Proc. 2024-40 §3.30 (Interest on Education Loans); Pub. 970 (2025) ch. 4',
+      label: 'Rev. Proc. 2024-40 §2.30 (Interest on Education Loans); Pub. 970 (2025) ch. 4',
       note: 'Phases out for modified AGI over $85,000 ($170,000 joint); completely phased out at $100,000 ($200,000 joint).',
     },
   },
@@ -157,7 +168,7 @@ export const PARAMETERS_2025: TaxYearParameters = {
     baseAmount: '1350',
     citation: {
       ...REV_PROC,
-      label: 'Rev. Proc. 2024-40 §3.02 (Unearned Income of Minor Children)',
+      label: 'Rev. Proc. 2024-40 §2.02 (Unearned Income of Minor Children)',
       note: '"the amount in § 1(g)(4)(A)(ii)(I), which is used to reduce the net unearned income reported on the child\'s return that is subject to the \'kiddie tax,\' is $1,350."',
     },
   },

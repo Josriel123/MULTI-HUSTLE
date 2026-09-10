@@ -47,11 +47,15 @@ export interface TransactionRow {
 export interface UserTaxProfileRow {
   filingStatus?: string | null;
   claimedAsDependent?: boolean | null;
+  /** Married filing separately: the spouse itemizes (IRC §63(c)(6)(A)). Not yet a database column; passes through when present. */
+  spouseItemizes?: boolean | null;
 }
 
 export interface Form1098TRow {
   box1: MoneyInput;
   box5: MoneyInput;
+  /** Part of Box 5 earmarked by the grant for room and board or other non-qualified expenses. Not yet a database column; passes through when present. */
+  restrictedToNonQualifiedExpenses?: MoneyInput | null;
 }
 
 export interface Form1098ERow {
@@ -137,9 +141,12 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
     assumptions.push('No filing status is saved on this account, so the estimate assumes single. Set it in your tax profile.');
   }
   const claimedAsDependent = args.user?.claimedAsDependent ?? false;
+  const spouseItemizes = args.user?.spouseItemizes ?? false;
 
   const bySource = { freelance: emptyBucket(), delivery: emptyBucket(), other: emptyBucket() };
   const excluded = new Map<IncomeCategory, ExcludedIncome>();
+  /** Distinct income sources that produced business receipts; more than one with a home office triggers the per-business-limit warning. */
+  const businessSources = new Set<string>();
   const expenses: ExpenseItem[] = [];
   let grossReceipts: Money = ZERO;
   let otherIncome: Money = ZERO;
@@ -183,6 +190,7 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
           grossReceipts = grossReceipts.plus(amount);
           cashIncome = cashIncome.plus(amount);
           bucket.income = bucket.income.plus(amount);
+          businessSources.add(row.incomeSource ? `${row.incomeSource.type}:${row.incomeSource.name}` : '(no source)');
           break;
         case 'other_income':
           otherIncome = otherIncome.plus(amount);
@@ -240,6 +248,24 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
         amount: entry.total.toFixed(2),
       });
     }
+    if (entry.category === 'refund') {
+      // Pub. 525, "Recovery and expense in same year": a refund of a deducted
+      // expense reduces that deduction. Nothing links a refund row to a purchase
+      // row, so the deduction is left as entered and the user is told.
+      warnings.push({
+        code: 'refund_not_netted',
+        message: `${entry.count} refund deposit(s) were excluded from income but did not reduce any deducted expense. If a refund reverses a business purchase deducted here, reduce that expense; otherwise the deduction is overstated (Pub. 525, recovery in the same year).`,
+        amount: entry.total.toFixed(2),
+      });
+    }
+  }
+  if (args.homeOffice && businessSources.size > 1) {
+    // Pub. 587, "More Than One Trade or Business": the §280A(c)(5) income limit
+    // is measured by the business that uses the office, not the combined profit.
+    warnings.push({
+      code: 'home_office_multiple_businesses',
+      message: `Business income comes from ${businessSources.size} sources but the home office deduction is capped at their combined profit. If the office serves only one of them, the real cap is that business's own profit and the deduction may be overstated (Pub. 587, More Than One Trade or Business).`,
+    });
   }
 
   const input: FederalTaxInput = {
@@ -259,8 +285,14 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
         : null,
     },
     otherIncome,
-    scholarships: args.form1098T ? { form1098T: { box1: args.form1098T.box1, box5: args.form1098T.box5 } } : null,
+    scholarships: args.form1098T
+      ? {
+          form1098T: { box1: args.form1098T.box1, box5: args.form1098T.box5 },
+          restrictedToNonQualifiedExpenses: args.form1098T.restrictedToNonQualifiedExpenses ?? undefined,
+        }
+      : null,
     studentLoanInterestPaid: args.form1098E ? args.form1098E.box1 : undefined,
+    spouseItemizes,
   };
 
   if (args.homeOffice) {

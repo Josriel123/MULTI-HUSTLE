@@ -102,6 +102,20 @@ describe('audit F5: married filing separately when the spouse itemizes', () => {
     expectMoney(e.incomeTax.tax, '5914.00');
     expect(e.warnings.map((w) => w.code)).toContain('mfs_spouse_itemizes');
   });
+
+  it('when the caller does not say, the deduction is applied and a warning asks (the audit scenario without the new field)', () => {
+    const e = estimateFederalTax({
+      taxYear: 2025,
+      filingStatus: 'married_filing_separately',
+      scheduleC: emptyBusiness,
+      w2: { wages: '50000', socialSecurityWages: '50000', medicareWages: '50000' },
+    });
+    expectMoney(e.standardDeduction.deduction, '15750.00');
+    expect(e.warnings.map((w) => w.code)).toContain('mfs_spouse_itemizes_unknown');
+    // Saying "no" removes the warning.
+    const no = estimateFederalTax({ taxYear: 2025, filingStatus: 'married_filing_separately', spouseItemizes: false, scheduleC: emptyBusiness });
+    expect(no.warnings.map((w) => w.code)).not.toContain('mfs_spouse_itemizes_unknown');
+  });
 });
 
 describe('audit F6: kiddie-tax warning', () => {

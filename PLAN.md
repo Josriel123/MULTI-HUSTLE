@@ -85,6 +85,7 @@ Fixed in Phase 2 (branch `phase-2-tax-engine`, pending audit):
 - **Mileage is no longer invented** in the summary (`0` until Phase 3 logs miles; `src/lib/tax/mileage.ts` prices logged miles at the year's rate).
 - **Disclaimer** is part of every estimate (`disclaimer` in the summary response and in `FederalTaxEstimate`). Phase 4 must render it wherever a liability figure appears.
 - The summary now covers only the tax year's transactions (default: current year, `?taxYear=` to override) and returns the full line-by-line `estimate` with `warnings`, `assumptions` and `notModeled`.
+- **Cold audit (2026-09-09, `docs/audits/federal-tax-2026-09-09/`) addressed per its TRIAGE.md:** part-year simplified home office prorated; §199A(i) minimum no longer capped at taxable income; kiddie-tax warning no longer gated on dependency; W-2 boxes 6 and 7, joint-return W-2 ownership, MFS spouse-itemizes and restricted scholarships added to the engine input; per-business home office limits and refund netting documented and warned; 2025 Rev. Proc. section numbers corrected; brackets now also checked against the auditor's independent transcription.
 
 Still open:
 - **The chart is hardcoded.** `api/dashboard/chart` returns seven literal month objects. It claims $36,000 gross against $47,500 of real data. (Phase 3)

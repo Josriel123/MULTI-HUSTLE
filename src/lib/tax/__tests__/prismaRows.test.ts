@@ -90,6 +90,50 @@ describe('buildFederalTaxInput', () => {
     expect(built.assumptions.join(' ')).toMatch(/monthly/);
   });
 
+  it('warns when a home office sits alongside business income from more than one source (per-business limit not modeled)', () => {
+    const homeOffice = { totalSqFt: '1000', officeSqFt: '150', rentAmount: '1500', utilitiesAmount: '200' };
+    const two = buildFederalTaxInput({
+      taxYear: 2026,
+      homeOffice,
+      transactions: [
+        { amount: '5000', type: 'Income', date: d('2026-02-01'), taxDeductible: false, category: 'business_income', incomeSource: FREELANCE },
+        { amount: '5000', type: 'Income', date: d('2026-03-01'), taxDeductible: false, category: 'business_income', incomeSource: DELIVERY },
+      ],
+    });
+    expect(two.warnings.map((w) => w.code)).toContain('home_office_multiple_businesses');
+    const one = buildFederalTaxInput({
+      taxYear: 2026,
+      homeOffice,
+      transactions: [
+        { amount: '5000', type: 'Income', date: d('2026-02-01'), taxDeductible: false, category: 'business_income', incomeSource: FREELANCE },
+        { amount: '5000', type: 'Income', date: d('2026-03-01'), taxDeductible: false, category: 'business_income', incomeSource: FREELANCE },
+      ],
+    });
+    expect(one.warnings.map((w) => w.code)).not.toContain('home_office_multiple_businesses');
+    const noOffice = buildFederalTaxInput({
+      taxYear: 2026,
+      transactions: [
+        { amount: '5000', type: 'Income', date: d('2026-02-01'), taxDeductible: false, category: 'business_income', incomeSource: FREELANCE },
+        { amount: '5000', type: 'Income', date: d('2026-03-01'), taxDeductible: false, category: 'business_income', incomeSource: DELIVERY },
+      ],
+    });
+    expect(noOffice.warnings.map((w) => w.code)).not.toContain('home_office_multiple_businesses');
+  });
+
+  it('passes spouseItemizes and restricted scholarship amounts through when the rows carry them', () => {
+    const built = buildFederalTaxInput({
+      taxYear: 2025,
+      transactions: [],
+      user: { filingStatus: 'married_filing_separately', spouseItemizes: true },
+      form1098T: { box1: '20000', box5: '10000', restrictedToNonQualifiedExpenses: '10000' },
+    });
+    expect(built.input.spouseItemizes).toBe(true);
+    expect(built.input.scholarships?.restrictedToNonQualifiedExpenses).toBe('10000');
+    const e = estimateFederalTax(built.input);
+    expectMoney(e.standardDeduction.deduction, '0.00');
+    expectMoney(e.income.taxableScholarships, '10000.00');
+  });
+
   it('a category from the wrong side (income tag on an expense) is ignored with a warning', () => {
     const built = buildFederalTaxInput({
       taxYear: 2025,

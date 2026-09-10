@@ -25,8 +25,11 @@ import type { Citation, FilingStatus, Line, Warning } from './types';
  * Negative QBI is carried forward to offset future QBI (§199A(c)(2)) and
  * produces no deduction this year; carryforwards are not tracked.
  *
- * From 2026, §199A(i) (Pub. L. 119-21) guarantees a minimum $400 deduction to
- * a taxpayer with at least $1,000 of QBI from active businesses.
+ * From 2026, §199A(i) (Pub. L. 119-21) sets the deduction at the greater of the
+ * ordinary amount or $400 for a taxpayer with at least $1,000 of QBI from
+ * businesses in which they materially participate. The $400 is not capped at
+ * taxable income (an earlier version of this module capped it; the 2026-09-09
+ * audit read the statute correctly and the cap was removed).
  */
 
 export const QBI_RATE = '0.20';
@@ -48,9 +51,9 @@ export const QBI_CITATIONS: Record<string, Citation> = {
     note: 'QBI is reduced by the deductible part of self-employment tax, the self-employed health insurance deduction and qualified retirement contributions. "Your total QBI deduction is limited to 20% of your taxable income, calculated before the QBI deduction, minus net capital gain."',
   },
   minimum: {
-    label: 'IRC §199A(i) (added by Pub. L. 119-21 §70105)',
+    label: 'IRC §199A(i) (added by Pub. L. 119-21 §70105); draft 2026 Form 8995 lines 15-17',
     url: 'https://www.law.cornell.edu/uscode/text/26/199A',
-    note: 'For taxable years beginning after December 31, 2025, an applicable taxpayer with at least $1,000 of QBI from active trades or businesses is allowed a deduction of not less than $400.',
+    note: '"In the case of an applicable taxpayer for any taxable year, the deduction allowed under subsection (a) for the taxable year shall be equal to the greater of (A) the amount of such deduction determined without regard to this subsection, or (B) $400." Applicable taxpayer: aggregate QBI from active (materially participated, §469(h)) trades or businesses of at least $1,000. No taxable-income cap; the draft form takes "the greater of line 15 or line 16".',
   },
   lossCarryforward: {
     label: 'IRC §199A(c)(2)',
@@ -123,11 +126,17 @@ export function computeQbiDeduction(input: QbiInput, params: TaxYearParameters):
   const tiLimit = cents(times(notBelowZero(tiBefore.minus(netCapGain)), QBI_RATE));
   let deduction = min(afterPhaseIn, tiLimit);
 
-  // §199A(i) minimum deduction (2026+), never more than taxable income itself.
+  // §199A(i) (tax years after 2025): "the deduction allowed under subsection (a)
+  // for the taxable year shall be equal to the greater of (A) the amount of such
+  // deduction determined without regard to this subsection, or (B) $400."
+  // Subsection (a) applies "except as provided in subsection (i)", so the
+  // taxable-income limitation in (a)(2) does not cap the minimum, and neither
+  // does anything else in the statute. Draft 2026 Form 8995 agrees: line 17 is
+  // "the greater of line 15 or line 16". Taxable income floors at zero downstream.
   let minimumApplied = false;
   const minimumRule = params.qbi.minimumDeduction;
   if (minimumRule && positiveQbi.greaterThanOrEqualTo(money(minimumRule.qbiFloor))) {
-    const floor = min(money(minimumRule.amount), tiBefore);
+    const floor = money(minimumRule.amount);
     if (floor.greaterThan(deduction)) {
       deduction = floor;
       minimumApplied = true;

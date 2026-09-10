@@ -17,6 +17,10 @@ import type { Citation, FilingStatus, Line } from './types';
  * net earnings from self-employment less the deductible half of SE tax
  * (Form 1040 instructions, Standard Deduction Worksheet for Dependents).
  *
+ * Married filing separately (§63(c)(6)(A)): no standard deduction at all when
+ * the spouse itemizes. The caller says so with `spouseItemizes`; without it the
+ * regular amount is used and the estimate can be too low for that case.
+ *
  * The additional amounts for age 65+ or blindness (§63(f)) and the OBBBA
  * senior deduction are not modeled; ages are unknown.
  */
@@ -37,6 +41,11 @@ export const STANDARD_DEDUCTION_CITATIONS: Record<string, Citation> = {
     url: 'https://www.irs.gov/publications/p501',
     note: '"Earned income (only for purposes of filing requirements and the standard deduction) also includes any part of a taxable scholarship."',
   },
+  spouseItemizes: {
+    label: 'IRC §63(c)(6)(A); Pub. 501, Married Filing Separately special rules',
+    url: 'https://www.law.cornell.edu/uscode/text/26/63',
+    note: 'The standard deduction is not allowed to "a married individual filing a separate return where either spouse itemizes deductions."',
+  },
 };
 
 export interface StandardDeductionInput {
@@ -44,11 +53,15 @@ export interface StandardDeductionInput {
   claimedAsDependent: boolean;
   /** Earned income as defined for the dependents worksheet. Ignored unless `claimedAsDependent`. */
   earnedIncome: MoneyInput;
+  /** Married filing separately only: the spouse itemizes on their own return (IRC §63(c)(6)(A)). */
+  spouseItemizes?: boolean;
 }
 
 export interface StandardDeductionResult {
   regularAmount: Money;
   dependentLimit: { floor: Money; earnedIncomeAddOn: Money; earnedIncome: Money; limit: Money } | null;
+  /** Why the deduction is zero regardless of the amounts, or null. */
+  ineligibleReason: 'spouse_itemizes' | null;
   /** Form 1040 line 12. */
   deduction: Money;
   lines: Line[];
@@ -60,8 +73,16 @@ export function computeStandardDeduction(input: StandardDeductionInput, params: 
   const citations = [STANDARD_DEDUCTION_CITATIONS.statute, params.standardDeduction.citation];
   const lines: Line[] = [{ ref: 'Form 1040 line 12 (chart)', label: `Standard deduction, ${input.filingStatus.replace(/_/g, ' ')}`, value: regular }];
 
+  // §63(c)(6)(A): no standard deduction for "a married individual filing a
+  // separate return where either spouse itemizes deductions."
+  if (input.filingStatus === 'married_filing_separately' && input.spouseItemizes) {
+    lines.push({ ref: 'Form 1040 line 12', label: 'Standard deduction: not allowed, spouse itemizes (IRC §63(c)(6)(A))', value: money(0) });
+    citations.push(STANDARD_DEDUCTION_CITATIONS.spouseItemizes);
+    return { regularAmount: regular, dependentLimit: null, ineligibleReason: 'spouse_itemizes', deduction: money(0), lines, citations };
+  }
+
   if (!input.claimedAsDependent) {
-    return { regularAmount: regular, dependentLimit: null, deduction: regular, lines, citations };
+    return { regularAmount: regular, dependentLimit: null, ineligibleReason: null, deduction: regular, lines, citations };
   }
 
   const floor = money(params.standardDeduction.dependentFloor);
@@ -82,6 +103,7 @@ export function computeStandardDeduction(input: StandardDeductionInput, params: 
   return {
     regularAmount: regular,
     dependentLimit: { floor, earnedIncomeAddOn: addOn, earnedIncome: earned, limit },
+    ineligibleReason: null,
     deduction,
     lines,
     citations,

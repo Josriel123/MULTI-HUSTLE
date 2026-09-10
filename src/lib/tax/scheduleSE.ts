@@ -12,8 +12,8 @@ import type { Citation, FilingStatus, Line, Warning } from './types';
  *   4a  Line 3 x 92.35%                          §1402(a)(12)
  *   4c  = 4a. If less than $400, no SE tax       §1402(b)(2)
  *   7   Social Security wage base for the year   §1402(b)(1)
- *   8a  W-2 Social Security wages (box 3)
- *   9   Line 7 - 8a, not below zero
+ *   8a  W-2 Social Security wages and tips (boxes 3 and 7); 8b-8c (Forms 4137/8919) not modeled
+ *   9   Line 7 - 8d, not below zero
  *   10  Smaller of 4c or 9, x 12.4%              §1401(a)
  *   11  Line 4c x 2.9%                           §1401(b)(1)
  *   12  Line 10 + 11, to Schedule 2 line 4
@@ -36,6 +36,8 @@ export const SE_RATES = {
   medicare: '0.029', // §1401(b)(1)
   additionalMedicare: '0.009', // §1401(b)(2)(A)
   halfDeduction: '0.5', // §164(f)(1)
+  /** Employee share of Medicare tax withheld from wages (§3101(b)(1)); Form 8959 line 21 multiplies Medicare wages by it. */
+  medicareEmployee: '0.0145',
 } as const;
 
 /** §1402(b)(2): no self-employment income (and no tax) when net earnings are under $400. */
@@ -52,9 +54,9 @@ export const ADDITIONAL_MEDICARE_THRESHOLDS: Record<FilingStatus, string> = {
 
 export const SCHEDULE_SE_CITATIONS: Record<string, Citation> = {
   form: {
-    label: '2025 Instructions for Schedule SE (Form 1040)',
+    label: '2025 Schedule SE (Form 1040) and instructions',
     url: 'https://www.irs.gov/instructions/i1040sse',
-    note: '"You must file Schedule SE if: The amount on line 4c of Schedule SE is $400 or more." Maximum self-employment income subject to Social Security tax for 2025 is $176,100.',
+    note: '"You must file Schedule SE if: The amount on line 4c of Schedule SE is $400 or more." Line 8a: "Total social security wages and tips (total of boxes 3 and 7 on Form(s) W-2) and railroad retirement (tier 1) compensation." Line 9: "Subtract line 8d from line 7." Maximum self-employment income subject to Social Security tax for 2025 is $176,100.',
   },
   netEarnings: {
     label: 'IRC §1402(a)(12)',
@@ -92,8 +94,10 @@ export interface ScheduleSEInput {
   /** Schedule C line 31. */
   netProfit: MoneyInput;
   filingStatus: FilingStatus;
-  /** W-2 box 3. Reduces the Social Security base available to SE income (line 8a). */
+  /** W-2 box 3. With box 7, reduces the Social Security base available to SE income (line 8a). */
   w2SocialSecurityWages?: MoneyInput;
+  /** W-2 box 7 (Social Security tips). Line 8a is "total of boxes 3 and 7 on Form(s) W-2". */
+  w2SocialSecurityTips?: MoneyInput;
   /** W-2 box 5. Reduces the Additional Medicare threshold (Form 8959 line 10). */
   w2MedicareWages?: MoneyInput;
 }
@@ -130,7 +134,10 @@ export interface ScheduleSEResult {
 
 export function computeScheduleSE(input: ScheduleSEInput, params: TaxYearParameters): ScheduleSEResult {
   const netProfit = money(input.netProfit, 'scheduleSE.netProfit');
-  const ssWages = input.w2SocialSecurityWages === undefined ? ZERO : nonNegativeMoney(input.w2SocialSecurityWages, 'w2.socialSecurityWages');
+  const ssWagesOnly = input.w2SocialSecurityWages === undefined ? ZERO : nonNegativeMoney(input.w2SocialSecurityWages, 'w2.socialSecurityWages');
+  const ssTips = input.w2SocialSecurityTips === undefined ? ZERO : nonNegativeMoney(input.w2SocialSecurityTips, 'w2.socialSecurityTips');
+  // Line 8a: "Total social security wages and tips (total of boxes 3 and 7 on Form(s) W-2)".
+  const ssWages = ssWagesOnly.plus(ssTips);
   const medicareWages = input.w2MedicareWages === undefined ? ZERO : nonNegativeMoney(input.w2MedicareWages, 'w2.medicareWages');
   const wageBase = money(params.selfEmployment.socialSecurityWageBase);
   const warnings: Warning[] = [];
@@ -178,8 +185,8 @@ export function computeScheduleSE(input: ScheduleSEInput, params: TaxYearParamet
     { ref: 'Schedule SE line 4a', label: 'Line 3 x 92.35%', value: netEarningsRaw },
     { ref: 'Schedule SE line 4c', label: 'Net earnings from self-employment (zero if under $400)', value: netEarnings },
     { ref: 'Schedule SE line 7', label: `Maximum earnings subject to Social Security (${params.taxYear})`, value: wageBase },
-    { ref: 'Schedule SE line 8a', label: 'W-2 Social Security wages', value: ssWages },
-    { ref: 'Schedule SE line 9', label: 'Line 7 minus line 8a', value: baseRemaining },
+    { ref: 'Schedule SE line 8a', label: 'Total Social Security wages and tips (W-2 boxes 3 and 7)', value: ssWages },
+    { ref: 'Schedule SE line 9', label: 'Line 7 minus line 8d', value: baseRemaining },
     { ref: 'Schedule SE line 10', label: 'Smaller of line 4c or 9, x 12.4%', value: socialSecurityTax },
     { ref: 'Schedule SE line 11', label: 'Line 4c x 2.9%', value: medicareTax },
     { ref: 'Schedule SE line 12', label: 'Self-employment tax, to Schedule 2 line 4', value: selfEmploymentTax },

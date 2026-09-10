@@ -3,6 +3,7 @@ import { computeIncomeTax } from '../incomeTax';
 import { money, ZERO, type Money } from '../money';
 import { getTaxYearParameters, isSupportedTaxYear, SUPPORTED_TAX_YEARS, TAX_YEAR_PARAMETERS, type BracketTableKey } from '../parameters';
 import type { FilingStatus } from '../types';
+import { INDEPENDENT_BRACKETS, INDEPENDENT_RATES } from './fixtures/irsBracketsIndependent';
 import { expectMoney } from './helpers';
 
 /**
@@ -88,6 +89,37 @@ describe.each(SUPPORTED_TAX_YEARS)('tax year %i', (year) => {
       const nextStart = new Date(periods[i].from + 'T00:00:00Z');
       expect(nextStart.getTime() - prevEnd.getTime()).toBe(24 * 3600 * 1000);
     }
+  });
+});
+
+describe('rate tables against an independent transcription (audit 2026-09-09)', () => {
+  // The self-consistency test above compares two fields of the SAME
+  // transcription, so a boundary and base copied wrongly together would pass.
+  // This fixture was typed from the IRS PDFs by the auditor, separately.
+  it('covers all 12 tables', () => {
+    expect(INDEPENDENT_BRACKETS).toHaveLength(12);
+  });
+
+  it.each(INDEPENDENT_BRACKETS.map((t) => [t.year, t.table, t] as const))('%i %s: production brackets equal the independent copy', (year, table, fixture) => {
+    const rows = TAX_YEAR_PARAMETERS[year].incomeTaxBrackets[table].rows;
+    expect(rows.slice(0, 6).map((r) => r.upTo)).toEqual([...fixture.tops]);
+    expect(rows.slice(1).map((r) => money(r.taxAtLowerBoundAsPrinted as string).toFixed(2))).toEqual(fixture.bases.map((b) => money(b).toFixed(2)));
+    expect(rows.map((r) => r.rate)).toEqual([...INDEPENDENT_RATES]);
+  });
+
+  it.each(INDEPENDENT_BRACKETS.map((t) => [t.year, t.table, t] as const))('%i %s: tax at every boundary, $1 below and $1 above, matches the independent bases', (year, table, fixture) => {
+    const p = TAX_YEAR_PARAMETERS[year];
+    let checked = 0;
+    for (let i = 0; i < 6; i++) {
+      const top = money(fixture.tops[i]);
+      const base = money(fixture.bases[i]);
+      // At the ceiling the tax is the printed base; $1 below removes one dollar at this bracket's rate; $1 above adds one at the next rate.
+      expectMoney(computeIncomeTax(top, STATUS_FOR_TABLE[table], p).tax, base.toFixed(2));
+      expectMoney(computeIncomeTax(top.minus(1), STATUS_FOR_TABLE[table], p).tax, base.minus(money(INDEPENDENT_RATES[i])).toFixed(2));
+      expectMoney(computeIncomeTax(top.plus(1), STATUS_FOR_TABLE[table], p).tax, base.plus(money(INDEPENDENT_RATES[i + 1])).toFixed(2));
+      checked += 3;
+    }
+    expect(checked).toBe(18);
   });
 });
 

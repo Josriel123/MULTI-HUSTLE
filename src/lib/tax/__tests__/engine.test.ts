@@ -56,7 +56,7 @@ describe('estimateFederalTax', () => {
     expect(e.disclaimer).toMatch(/tax year 2025 as single/);
     expect(e.notModeled.length).toBeGreaterThan(5);
     expect(e.citations.map((c) => c.label)).toEqual(
-      expect.arrayContaining(['IRC §1402(a)(12)', 'IRC §199A(a), (b)(2)', 'IRC §63(c)(2), (c)(7)', 'Rev. Proc. 2024-40 §3.01, Table 3 (Unmarried Individuals other than Surviving Spouses and Heads of Households)']),
+      expect.arrayContaining(['IRC §1402(a)(12)', 'IRC §199A(a), (b)(2)', 'IRC §63(c)(2), (c)(7)', 'Rev. Proc. 2024-40 §2.01, Table 3 (Unmarried Individuals other than Surviving Spouses and Heads of Households)']),
     );
     // No duplicate citations.
     const keys = e.citations.map((c) => `${c.label}|${c.url}`);

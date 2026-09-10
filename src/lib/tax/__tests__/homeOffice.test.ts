@@ -57,11 +57,18 @@ describe('computeHomeOffice', () => {
     expectMoney(r.deduction, '1500.00');
   });
 
-  it('prorates a partial-year office by months used', () => {
-    // (1,500 + 200) x 6 = 10,200; x 15% = 1,530.00
+  it('prorates a partial-year office by months used, under both methods', () => {
+    // Regular: (1,500 + 200) x 6 = 10,200; x 15% = 1,530.00
+    // Simplified (Rev. Proc. 2013-13 §4.08(4)): average monthly area 150 x 6 / 12 = 75 sq ft; x $5 = 375.00
     const r = computeHomeOffice({ ...RENTER, monthsUsed: 6 }, '20000');
     expectMoney(r.regular.annualRentAndUtilities, '10200.00');
     expectMoney(r.regular.beforeLimit, '1530.00');
+    expectMoney(r.simplified.cappedSquareFeet, '150.00');
+    expectMoney(r.simplified.allowableSquareFeet, '75.00');
+    expectMoney(r.simplified.beforeLimit, '375.00');
+    expect(r.citations.map((c) => c.label)).toContain('Rev. Proc. 2013-13 §4.08(4); Pub. 587, "Part-year use or area changes"');
+    // A full year is unchanged.
+    expectMoney(computeHomeOffice(RENTER, '20000').simplified.allowableSquareFeet, '150.00');
   });
 
   it('keeps square-footage ratios exact (no float drift)', () => {
