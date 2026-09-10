@@ -31,9 +31,12 @@ model User {
   transactions     Transaction[]
   plaidConnections PlaidConnection[]
   mileageLogs      MileageLog[]
-  form1098T        Form1098T?
-  form1098E        Form1098E?
-  homeOffice       HomeOfficeDeduction?
+  // One row per tax year, not one per user: a 1098-T is a statement about a
+  // particular year, and reusing last year's figures in this year's estimate
+  // is simply wrong. Query these with `where: { taxYear }`.
+  form1098T        Form1098T[]
+  form1098E        Form1098E[]
+  homeOffice       HomeOfficeDeduction[]
 }
 
 model IncomeSource {
@@ -117,28 +120,40 @@ model PlaidConnection {
 
 model Form1098T {
   id        String   @id @default(cuid())
-  userId    String   @unique
+  userId    String
   user      User     @relation(fields: [userId], references: [id])
+  /// The year the statement covers. Box 1 and Box 5 are year-specific.
+  taxYear   Int
   box1      Decimal  @db.Decimal(12, 2) // Tuition & Related Expenses
   box5      Decimal  @db.Decimal(12, 2) // Scholarships & Grants
   createdAt DateTime @default(now())
+
+  @@unique([userId, taxYear])
 }
 
 model Form1098E {
   id        String   @id @default(cuid())
-  userId    String   @unique
+  userId    String
   user      User     @relation(fields: [userId], references: [id])
+  /// The year the interest was paid. The §221 deduction is annual.
+  taxYear   Int
   box1      Decimal  @db.Decimal(12, 2) // Student Loan Interest Paid
   createdAt DateTime @default(now())
+
+  @@unique([userId, taxYear])
 }
 
 model HomeOfficeDeduction {
   id              String   @id @default(cuid())
-  userId          String   @unique
+  userId          String
   user            User     @relation(fields: [userId], references: [id])
+  /// Rent, utilities and the space itself all change between years.
+  taxYear         Int
   totalSqFt       Decimal  @db.Decimal(12, 2)
   officeSqFt      Decimal  @db.Decimal(12, 2)
   rentAmount      Decimal  @db.Decimal(12, 2)
   utilitiesAmount Decimal  @db.Decimal(12, 2)
   createdAt       DateTime @default(now())
+
+  @@unique([userId, taxYear])
 }

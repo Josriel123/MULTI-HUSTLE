@@ -61,7 +61,13 @@ export async function GET(request: NextRequest) {
     const [userRecord, transactions] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
-        include: { form1098T: true, form1098E: true, homeOffice: true },
+        // Year-scoped: one row per user per year, so an unfiltered include
+        // would pull another year's forms into this year's curve.
+        include: {
+          form1098T: { where: { taxYear } },
+          form1098E: { where: { taxYear } },
+          homeOffice: { where: { taxYear } },
+        },
       }),
       prisma.transaction.findMany({
         where: {
@@ -88,9 +94,10 @@ export async function GET(request: NextRequest) {
         taxYear,
         transactions: transactionsThroughMonth,
         user: userRecord,
-        form1098T: userRecord?.form1098T,
-        form1098E: userRecord?.form1098E,
-        homeOffice: userRecord?.homeOffice,
+        // The compound unique on (userId, taxYear) means at most one row each.
+        form1098T: userRecord?.form1098T[0] ?? null,
+        form1098E: userRecord?.form1098E[0] ?? null,
+        homeOffice: userRecord?.homeOffice[0] ?? null,
       });
 
       const estimate = estimateFederalTax(built.input);
