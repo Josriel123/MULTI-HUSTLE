@@ -1,0 +1,313 @@
+✖ F1: six full qualifying months get half the annual simplified home-office deduction (1.8699ms)
+✖ F2 DOMAIN GAP: joint return, spouse B wages do not consume self-employed spouse A Social Security base (1.2334ms)
+✖ F3 DOMAIN GAP: Schedule SE line 8a must include W-2 box 7 tips as well as box 3 (0.2972ms)
+✖ F4 DOMAIN GAP: reconcile Additional Medicare withholding from W-2 box 6 (0.3352ms)
+✖ F5 DOMAIN GAP: MFS spouse itemizes, so this taxpayer cannot claim the standard deduction (0.2828ms)
+✖ F6a: kiddie-tax warning cannot be conditional on dependency status (2.393ms)
+✖ F6b: dependent with $5000 unearned prizes also needs the promised kiddie-tax warning (0.5229ms)
+✖ F7 DOMAIN GAP: unrelated business profit cannot unlock a loss-making business home-office deduction (0.2061ms)
+✖ F8: 2026 active-business minimum QBI deduction is $400 even when pre-QBI taxable income is $100 (0.1448ms)
+✖ F9: every-estimate omission list must disclose that prior-year QBI loss carryforwards are unsupported (0.3404ms)
+✖ F10 DOMAIN GAP: a fully refunded business purchase cannot remain deductible (0.6377ms)
+✖ F11 DOMAIN GAP: a housing-restricted scholarship cannot be allocated to separately paid tuition (0.123ms)
+✔ CONTROL: SE deduction before student-loan MAGI; student-loan deduction before QBI taxable-income cap (0.4751ms)
+✔ CONTROL: Schedule C loss offsets W-2 income without negative SE tax (0.2395ms)
+✔ CONTROL: below-$400 earnings do not acquire Additional Medicare tax from high wages (0.1254ms)
+✔ CONTROL: taxable scholarship increases dependent standard deduction and creates no SE income (0.1923ms)
+✔ CONTROL: truly zero input yields zero tax in every supported year and filing status (0.7894ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 5
+ℹ fail 12
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 22.8614
+
+✖ failing tests:
+
+test at ..\..\..\..\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:31:1
+✖ F1: six full qualifying months get half the annual simplified home-office deduction (1.8699ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '1500.00'
+  - '750.00'
+  
+      at moneyIs (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:27:46)
+      at TestContext.<anonymous> (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:36:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.start (node:internal/test_runner/test:1191:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '1500.00',
+    expected: '750.00',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ..\..\..\..\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:39:1
+✖ F2 DOMAIN GAP: joint return, spouse B wages do not consume self-employed spouse A Social Security base (1.2334ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '2678.15'
+  - '14129.55'
+  
+      at moneyIs (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:27:46)
+      at TestContext.<anonymous> (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:47:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '2678.15',
+    expected: '14129.55',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ..\..\..\..\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:50:1
+✖ F3 DOMAIN GAP: Schedule SE line 8a must include W-2 box 7 tips as well as box 3 (0.2972ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '2532.03'
+  - '535.63'
+  
+      at moneyIs (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:27:46)
+      at TestContext.<anonymous> (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:57:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '2532.03',
+    expected: '535.63',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ..\..\..\..\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:60:1
+✖ F4 DOMAIN GAP: reconcile Additional Medicare withholding from W-2 box 6 (0.3352ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '25000.00'
+  - '25450.00'
+       ^
+  
+      at moneyIs (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:27:46)
+      at TestContext.<anonymous> (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:67:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '25000.00',
+    expected: '25450.00',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ..\..\..\..\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:70:1
+✖ F5 DOMAIN GAP: MFS spouse itemizes, so this taxpayer cannot claim the standard deduction (0.2828ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  '15750.00' !== '0.00'
+  
+      at moneyIs (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:27:46)
+      at TestContext.<anonymous> (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:77:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '15750.00',
+    expected: '0.00',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ..\..\..\..\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:80:1
+✖ F6a: kiddie-tax warning cannot be conditional on dependency status (2.393ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(e.warnings.some(w => w.code === 'kiddie_tax_may_apply'))
+  
+      at TestContext.<anonymous> (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:88:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at ..\..\..\..\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:91:1
+✖ F6b: dependent with $5000 unearned prizes also needs the promised kiddie-tax warning (0.5229ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(e.warnings.some(w => w.code === 'kiddie_tax_may_apply'))
+  
+      at TestContext.<anonymous> (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:96:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at ..\..\..\..\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:99:1
+✖ F7 DOMAIN GAP: unrelated business profit cannot unlock a loss-making business home-office deduction (0.2061ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '12000.00'
+  - '15000.00'
+  
+      at moneyIs (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:27:46)
+      at TestContext.<anonymous> (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:109:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '12000.00',
+    expected: '15000.00',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ..\..\..\..\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:112:1
+✖ F8: 2026 active-business minimum QBI deduction is $400 even when pre-QBI taxable income is $100 (0.1448ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  '100.00' !== '400.00'
+  
+      at moneyIs (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:27:46)
+      at TestContext.<anonymous> (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:119:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '100.00',
+    expected: '400.00',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ..\..\..\..\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:122:1
+✖ F9: every-estimate omission list must disclose that prior-year QBI loss carryforwards are unsupported (0.3404ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /QBI[^\n]*(?:carryforward|carryover)|(?:carryforward|carryover)[^\n]*QBI/i. Input:
+  
+  "Tax credits of any kind: earned income credit (IRC §32), child tax credit (§24), education credits (§25A), saver's credit (§25B), premium tax credit (§36B). Credits reduce tax dollar for dollar, so the real liability may be well below this estimate.\n" +
+    'Itemized deductions (Schedule A). The standard deduction is always used.\n' +
+    'W-2 wages, withholding, and estimated tax payments, unless supplied directly to the engine; bank deposits of paychecks are never treated as wages.\n' +
+    'Capital gains and losses (Schedule D), dividends, interest, and other investment income. Deposits from investment sales are excluded, not taxed.\n' +
+    'Depreciation and §179 expensing (Form 4562) for equipment costing more than the $2,500 de minimis amount.\n' +
+    'Self-employed health insurance deduction (§162(l)) and retirement plan contributions (§219, §404).\n' +
+    'Vehicle expenses: mileage must be logged (Schedule C Part IV); it is never inferred from income.\n' +
+    'Loss limitations: at-risk (§465), passive activity (§469), hobby loss (§183), excess business loss (§461(l)).\n' +
+    'Kiddie tax (Form 8615) for dependents under 24 with unearned income, including taxable scholarships, over the threshold. A warning is raised when it may apply.\n' +
+    'Alternative minimum tax (Form 6251) and net investment income tax (Form 8960).\n' +
+    'Additional standard deduction for age 65 or over or blindness (§63(f)), and the temporary senior, tips, overtime and car-loan-interest deductions added by Pub. L. 119-21.\n' +
+    'Estimated tax penalty (§6654) and the timing of quarterly payments.\n' +
+    'Household employment taxes (Schedule H), first-time homebuyer or other recapture taxes.\n' +
+    'State and local income tax.\n' +
+    'Specified service trade or business status and the W-2 wage / UBIA limits under §199A above the threshold (assumed: no employees, no depreciable property).'
+  
+      at TestContext.<anonymous> (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:126:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: "Tax credits of any kind: earned income credit (IRC §32), child tax credit (§24), education credits (§25A), saver's credit (§25B), premium tax credit (§36B). Credits reduce tax dollar for dollar, so the real liability may be well below this estimate.\nItemized deductions (Schedule A). The standard deduction is always used.\nW-2 wages, withholding, and estimated tax payments, unless supplied directly to the engine; bank deposits of paychecks are never treated as wages.\nCapital gains and losses (Schedule D), dividends, interest, and other investment income. Deposits from investment sales are excluded, not taxed.\nDepreciation and §179 expensing (Form 4562) for equipment costing more than the $2,500 de minimis amount.\nSelf-employed health insurance deduction (§162(l)) and retirement plan contributions (§219, §404).\nVehicle expenses: mileage must be logged (Schedule C Part IV); it is never inferred from income.\nLoss limitations: at-risk (§465), passive activity (§469), hobby loss (§183), excess business loss (§461(l)).\nKiddie tax (Form 8615) for dependents under 24 with unearned income, including taxable scholarships, over the threshold. A warning is raised when it may apply.\nAlternative minimum tax (Form 6251) and net investment income tax (Form 8960).\n...",
+    expected: /QBI[^\n]*(?:carryforward|carryover)|(?:carryforward|carryover)[^\n]*QBI/i,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at ..\..\..\..\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:129:1
+✖ F10 DOMAIN GAP: a fully refunded business purchase cannot remain deductible (0.6377ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '9000.00'
+  - '10000.00'
+  
+      at moneyIs (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:27:46)
+      at TestContext.<anonymous> (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:146:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '9000.00',
+    expected: '10000.00',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ..\..\..\..\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:149:1
+✖ F11 DOMAIN GAP: a housing-restricted scholarship cannot be allocated to separately paid tuition (0.123ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  '0.00' !== '10000.00'
+  
+      at moneyIs (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:27:46)
+      at TestContext.<anonymous> (C:\Users\joelb\.codex\audits\federal-tax-2026-09-09\counterexamples.cjs:154:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1325:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:911:18)
+      at Test.postRun (node:internal/test_runner/test:1465:19)
+      at Test.run (node:internal/test_runner/test:1390:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '0.00',
+    expected: '10000.00',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
