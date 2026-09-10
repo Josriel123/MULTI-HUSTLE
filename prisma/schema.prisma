@@ -30,6 +30,7 @@ model User {
   incomeSources    IncomeSource[]
   transactions     Transaction[]
   plaidConnections PlaidConnection[]
+  mileageLogs      MileageLog[]
   form1098T        Form1098T?
   form1098E        Form1098E?
   homeOffice       HomeOfficeDeduction?
@@ -43,6 +44,39 @@ model IncomeSource {
   user   User   @relation(fields: [userId], references: [id])
 
   transactions Transaction[]
+  mileageLogs  MileageLog[]
+}
+
+/// Business miles driven, logged by the user. Schedule C Part IV.
+///
+/// Mileage is never inferred from income — the old dashboard multiplied
+/// deposits by 0.25 and presented the result as real. A deduction requires
+/// actual logged trips, which is what this table holds.
+model MileageLog {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  /// Trip date. This decides the rate: the IRS standard mileage rate can
+  /// change mid-year, which is why mileageRateOn() in src/lib/tax/mileage.ts
+  /// takes a date rather than just a tax year.
+  date DateTime
+
+  /// Miles driven. Decimal for the same reason money is — odometer readings
+  /// carry tenths, and summing floats drifts.
+  miles Decimal @db.Decimal(10, 2)
+
+  /// Business purpose of the trip. Schedule C Part IV expects one, and the
+  /// IRS requires contemporaneous records to substantiate the deduction.
+  purpose String?
+
+  incomeSourceId String?
+  incomeSource   IncomeSource? @relation(fields: [incomeSourceId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, date])
 }
 
 model Transaction {
