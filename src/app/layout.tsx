@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Lock, Shield, TrendingUp } from 'lucide-react';
 import SidebarNav from './components/SidebarNav';
-import Link from 'next/link';
 import { ClerkProvider, UserButton, Show, SignInButton } from '@clerk/nextjs';
 import "./globals.css";
 

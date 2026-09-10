@@ -1,7 +1,32 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { Home, TrendingDown, Save, Loader2, Info } from 'lucide-react';
+import { Home, TrendingDown, Save, Loader2, Info, AlertTriangle } from 'lucide-react';
+
+interface SummaryData {
+  disclaimer?: string;
+  warnings?: Array<{ message: string; code?: string; amount?: number }>;
+  sources?: {
+    freelance?: {
+      income?: number;
+      deductions?: number;
+      homeOfficeDeduction?: number;
+    };
+    [key: string]: unknown;
+  };
+  estimate?: {
+    scheduleC?: {
+      homeOfficeDeduction?: number;
+    };
+    totalTax?: number;
+    [key: string]: unknown;
+  };
+  summary?: {
+    taxLiability?: number;
+    gross?: number;
+    net?: number;
+  };
+}
 
 export default function HomeOfficeHub() {
   const [loading, setLoading] = useState(true);
@@ -12,7 +37,7 @@ export default function HomeOfficeHub() {
   const [rentAmount, setRentAmount] = useState('');
   const [utilitiesAmount, setUtilitiesAmount] = useState('');
   
-  const [summaryData, setSummaryData] = useState<any>(null);
+  const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -62,7 +87,7 @@ export default function HomeOfficeHub() {
       } else {
         alert("Failed to save values");
       }
-    } catch (e) {
+    } catch {
       alert("Error saving Form");
     }
     setSaving(false);
@@ -86,9 +111,7 @@ export default function HomeOfficeHub() {
 
   // Dynamic real-time calculation instead of waiting for the database to sync
   const appliedDeduction = Math.max(simplified, standard);
-
-  // Assuming top tax liability reduction
-  const estTaxSavings = appliedDeduction * 0.273; // 15.3% SE + 12% Income
+  const engineDeduction = summaryData?.sources?.freelance?.homeOfficeDeduction ?? summaryData?.estimate?.scheduleC?.homeOfficeDeduction ?? appliedDeduction;
 
   return (
     <div className="animate-slide-up" style={{ maxWidth: '1000px', margin: '0 auto', paddingBottom: '4rem', filter: loading ? 'blur(4px)' : 'none', transition: 'filter 0.3s' }}>
@@ -103,6 +126,32 @@ export default function HomeOfficeHub() {
           <p className="text-secondary" style={{ fontSize: '1.1rem' }}>Convert your personal rent and utilities into a legal Schedule C tax shield.</p>
         </div>
       </div>
+
+      {/* Disclaimers & Warnings */}
+      {(summaryData?.disclaimer || (summaryData?.warnings && summaryData.warnings.length > 0)) && (
+        <div style={{ marginBottom: '2rem', padding: '1.25rem', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '10px' }}>
+          {summaryData?.disclaimer && (
+            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: summaryData?.warnings && summaryData.warnings.length > 0 ? '0.75rem' : 0 }}>
+              <Info size={18} color="#f97316" style={{ flexShrink: 0, marginTop: '2px' }} />
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
+                <strong>Statutory Estimate Disclaimer:</strong> {summaryData.disclaimer}
+              </p>
+            </div>
+          )}
+          {summaryData?.warnings && summaryData.warnings.length > 0 && (
+            <div style={{ borderTop: summaryData?.disclaimer ? '1px solid var(--border-color)' : 'none', paddingTop: summaryData?.disclaimer ? '0.5rem' : 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-red)', marginBottom: '0.3rem' }}>
+                <AlertTriangle size={16} /> Tax Model Notices:
+              </div>
+              <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                {summaryData.warnings.map((w, idx) => (
+                  <li key={idx}>{w.message}{w.amount ? ` (~$${w.amount})` : ''}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '2rem', marginBottom: '2rem' }}>
         
@@ -223,16 +272,18 @@ export default function HomeOfficeHub() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                 <span className="text-secondary">Engine Applied Shield (Maximum)</span>
                 <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#f97316' }}>
-                  {formatCurrency(appliedDeduction)}
+                  {formatCurrency(engineDeduction)}
                 </div>
               </div>
               
               <div className="animate-slide-up" style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(249, 115, 22, 0.1)', border: '1px solid #f97316', borderRadius: '8px', display: 'flex', gap: '0.5rem', color: '#ffedd5' }}>
                 <TrendingDown size={28} style={{ flexShrink: 0, color: '#f97316' }} />
                 <div>
-                  <strong style={{ fontSize: '1.1rem', marginBottom: '0.2rem', display: 'block', color: '#f97316' }}>Est. Tax Annihilation: ~{formatCurrency(estTaxSavings)}</strong>
+                  <strong style={{ fontSize: '1.1rem', marginBottom: '0.2rem', display: 'block', color: '#f97316' }}>
+                    Engine Deduction Applied: {formatCurrency(engineDeduction)}
+                  </strong>
                   <p style={{ fontSize: '0.9rem', lineHeight: 1.4, color: '#fed7aa' }}>
-                    By applying this spatial loophole, you are legally sheltering <strong>{appliedDeduction > 0 ? formatCurrency(appliedDeduction) : '$0'}</strong> of your Gig Profit from the 15.3% IRS Self-Employment bracket.
+                    By applying this spatial deduction, you legally shelter <strong>{engineDeduction > 0 ? formatCurrency(engineDeduction) : '$0'}</strong> of your Schedule C Freelance profit from self-employment and income tax calculations.
                   </p>
                 </div>
               </div>

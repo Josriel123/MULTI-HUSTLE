@@ -1,14 +1,46 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { Download, Printer, FileText, CheckCircle2, TrendingUp, AlertCircle, Calendar } from 'lucide-react';
+import { Printer, FileText, CheckCircle2, TrendingUp, AlertCircle, Calendar, Info, AlertTriangle } from 'lucide-react';
+
+interface TaxWarning {
+  code: string;
+  message: string;
+  amount?: string;
+}
+
+interface SummaryPayload {
+  disclaimer?: string;
+  warnings?: TaxWarning[];
+  summary?: {
+    gross: number;
+    net: number;
+    taxLiability: number;
+  };
+  sources?: {
+    freelance?: { income: number; deductions: number; homeOfficeDeduction?: number };
+    delivery?: { income: number; mileage: number; mileageDeduction?: number };
+    scholarships?: { taxable: number; textbookSavings: number; loanInterestDeduction: number };
+  };
+}
+
+interface TransactionExportItem {
+  id: string;
+  date: string;
+  type: string;
+  amount: string;
+  description?: string | null;
+  taxDeductible: boolean;
+  incomeSource?: { name: string } | null;
+}
 
 export default function CPAExporter() {
   const [loading, setLoading] = useState(true);
-  const [summaryData, setSummaryData] = useState<any>(null);
-  const [transactionData, setTransactionData] = useState<any>(null);
+  const [summaryData, setSummaryData] = useState<SummaryPayload | null>(null);
+  const [transactionData, setTransactionData] = useState<TransactionExportItem[] | null>(null);
 
   useEffect(() => {
+    let ignore = false;
     async function fetchLedger() {
       try {
         const [sumRes, tpRes] = await Promise.all([
@@ -18,15 +50,22 @@ export default function CPAExporter() {
         const sum = await sumRes.json();
         const txs = await tpRes.json();
         
-        setSummaryData(sum);
-        setTransactionData(txs);
+        if (!ignore) {
+          setSummaryData(sum);
+          setTransactionData(txs);
+        }
       } catch (err) {
         console.error(err);
       } finally {
-        setLoading(false);
+        if (!ignore) {
+          setLoading(false);
+        }
       }
     }
     fetchLedger();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const formatCurrency = (val: number) => {
@@ -44,10 +83,10 @@ export default function CPAExporter() {
     let csvContent = "data:text/csv;charset=utf-8,";
     csvContent += "Date,Type,Amount,Description,Is Tax Deductible,Source\n";
 
-    transactionData.forEach((t: any) => {
+    transactionData.forEach((t: TransactionExportItem) => {
       const date = new Date(t.date).toLocaleDateString() || '';
       const type = t.type || '';
-      const amount = t.amount || 0;
+      const amount = t.amount || '0.00';
       const desc = `"${(t.description || '').replace(/"/g, '""')}"`;
       const ded = t.taxDeductible ? 'YES' : 'NO';
       const source = t.incomeSource?.name || 'Manual';
@@ -76,7 +115,7 @@ export default function CPAExporter() {
   const freeDed = summaryData?.sources?.freelance?.deductions || 0;
   
   const shipIncome = summaryData?.sources?.delivery?.income || 0;
-  const shipMile = summaryData?.sources?.delivery?.mileage || 0;
+  const shipMile = summaryData?.sources?.delivery?.mileageDeduction ?? summaryData?.sources?.delivery?.mileage ?? 0;
 
   const hoDed = summaryData?.sources?.freelance?.homeOfficeDeduction || 0;
   
@@ -134,7 +173,7 @@ export default function CPAExporter() {
         <div className="card" style={{ padding: '0', background: 'transparent', border: 'none', boxShadow: 'none' }}>
         
         {/* Key KPI Row */}
-        <div style={{ display: 'flex', gap: '2rem', marginBottom: '3rem' }}>
+        <div style={{ display: 'flex', gap: '2rem', marginBottom: '1.5rem' }}>
           <div style={{ flex: 1, padding: '1.5rem', border: '2px solid var(--border-color)', borderRadius: '8px', textAlign: 'center' }}>
              <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600, marginBottom: '0.5rem' }}>Total Gross Engine Input</p>
              <h2 style={{ fontSize: '2.5rem', margin: 0 }}>{formatCurrency(grossProp)}</h2>
@@ -142,12 +181,39 @@ export default function CPAExporter() {
           <div style={{ flex: 1, padding: '1.5rem', border: '2px solid var(--border-color)', borderRadius: '8px', textAlign: 'center' }}>
              <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600, marginBottom: '0.5rem' }}>Est. Total Tax Liability</p>
              <h2 style={{ fontSize: '2.5rem', margin: 0 }}>{formatCurrency(taxProp)}</h2>
+             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>Before credits; not an amount owed</p>
           </div>
           <div style={{ flex: 1, padding: '1.5rem', background: 'var(--accent-green-dim)', border: '2px solid var(--accent-green)', borderRadius: '8px', textAlign: 'center' }}>
              <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600, marginBottom: '0.5rem' }}>Safe-To-Spend True Net</p>
              <h2 style={{ fontSize: '2.5rem', margin: 0, color: 'var(--accent-green)' }}>{formatCurrency(netProp)}</h2>
           </div>
         </div>
+
+        {/* Statutory Disclaimer & Engine Warnings */}
+        {(summaryData?.disclaimer || (summaryData?.warnings && summaryData.warnings.length > 0)) && (
+          <div style={{ marginBottom: '2.5rem', padding: '1rem 1.25rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+            {summaryData?.disclaimer && (
+              <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: summaryData?.warnings && summaryData.warnings.length > 0 ? '0.75rem' : 0 }}>
+                <Info size={18} color="var(--accent-blue)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.4 }}>
+                  <strong>Statutory Estimate Disclaimer:</strong> {summaryData.disclaimer}
+                </p>
+              </div>
+            )}
+            {summaryData?.warnings && summaryData.warnings.length > 0 && (
+              <div style={{ borderTop: summaryData?.disclaimer ? '1px solid var(--border-color)' : 'none', paddingTop: summaryData?.disclaimer ? '0.5rem' : 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-red)', marginBottom: '0.3rem' }}>
+                  <AlertTriangle size={16} /> Auditor &amp; Modeler Notices:
+                </div>
+                <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  {summaryData.warnings.map((w, idx) => (
+                    <li key={idx}>{w.message}{w.amount ? ` (~$${w.amount})` : ''}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Section: Schedule C */}
         <div style={{ marginBottom: '3rem', pageBreakInside: 'avoid' }}>

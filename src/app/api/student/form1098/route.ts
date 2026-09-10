@@ -12,7 +12,7 @@ export async function GET() {
       where: { userId }
     });
     return NextResponse.json({ form });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed' }, { status: 500 });
   }
 }

@@ -1,7 +1,25 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { BookOpen, AlertCircle, Save, TrendingDown, Loader2 } from 'lucide-react';
+import { BookOpen, AlertCircle, Save, TrendingDown, Loader2, Info, AlertTriangle } from 'lucide-react';
+
+interface TaxWarning {
+  code: string;
+  message: string;
+  amount?: string;
+}
+
+interface StudentSummaryData {
+  disclaimer?: string;
+  warnings?: TaxWarning[];
+  sources?: {
+    scholarships?: {
+      taxable: number;
+      textbookSavings: number;
+      loanInterestDeduction: number;
+    };
+  };
+}
 
 export default function StudentHub() {
   const [loading, setLoading] = useState(true);
@@ -12,9 +30,10 @@ export default function StudentHub() {
   const [box1E, setBox1E] = useState('');
   const [savingE, setSavingE] = useState(false);
   
-  const [summaryData, setSummaryData] = useState<any>(null);
+  const [summaryData, setSummaryData] = useState<StudentSummaryData | null>(null);
 
   useEffect(() => {
+    let ignore = false;
     async function load() {
       try {
         const [formRes, summaryRes, formERes] = await Promise.all([
@@ -27,23 +46,30 @@ export default function StudentHub() {
         const summary = await summaryRes.json();
         const formEData = await formERes.json();
 
-        if (formData.form) {
-          setBox1(formData.form.box1.toString());
-          setBox5(formData.form.box5.toString());
-        }
-        if (formEData.form) {
-          setBox1E(formEData.form.box1.toString());
-        }
-        if (summary.sources) {
-          setSummaryData(summary);
+        if (!ignore) {
+          if (formData.form) {
+            setBox1(formData.form.box1.toString());
+            setBox5(formData.form.box5.toString());
+          }
+          if (formEData.form) {
+            setBox1E(formEData.form.box1.toString());
+          }
+          if (summary.sources) {
+            setSummaryData(summary);
+          }
         }
       } catch (err) {
         console.error(err);
       } finally {
-        setLoading(false);
+        if (!ignore) {
+          setLoading(false);
+        }
       }
     }
     load();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const handleSave = async () => {
@@ -56,9 +82,9 @@ export default function StudentHub() {
       });
       if (res.ok) {
         alert("Form 1098-T Saved!");
-        window.location.reload(); // Refresh to ensure dashboard and math updates perfectly
+        window.location.reload();
       }
-    } catch (e) {
+    } catch {
       alert("Error saving Form");
     }
     setSaving(false);
@@ -76,12 +102,11 @@ export default function StudentHub() {
         alert("Form 1098-E Saved!");
         window.location.reload(); 
       }
-    } catch (e) {
+    } catch {
       alert("Error saving Form");
     }
     setSavingE(false);
   };
-
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(val);
@@ -90,16 +115,10 @@ export default function StudentHub() {
   const hasOverflow = Number(box5) > Number(box1);
   const taxableGross = hasOverflow ? Number(box5) - Number(box1) : 0;
   
-  // From our backend calculation
+  // From audited tax engine calculation
   const textbookSavings = summaryData?.sources?.scholarships?.textbookSavings || 0;
-  const ultimateTaxableScholarship = Math.max(0, taxableGross - textbookSavings);
-  
-  // Demonstration of standard SE logic
-  // A standard software might accidentally charge 15.3% SE Tax on this $20,000 refund because it was in Plaid.
-  const mistakenSETax = ultimateTaxableScholarship * 0.153;
-  
+  const ultimateTaxableScholarship = summaryData?.sources?.scholarships?.taxable ?? Math.max(0, taxableGross - textbookSavings);
   const loanInterestDeducted = summaryData?.sources?.scholarships?.loanInterestDeduction || 0;
-  const loanEstimatedSavings = loanInterestDeducted * 0.12; // 12% standard income tax assumed
 
   return (
     <div className="animate-slide-up" style={{ maxWidth: '1000px', margin: '0 auto', paddingBottom: '4rem', filter: loading ? 'blur(4px)' : 'none', transition: 'filter 0.3s' }}>
@@ -111,9 +130,35 @@ export default function StudentHub() {
         </div>
         <div>
           <h1 style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>1098-T Tax Override</h1>
-          <p className="text-secondary" style={{ fontSize: '1.1rem' }}>Bypass the 15.3% Self-Employment Tax penalty on your "Full Ride" scholarship overflow.</p>
+          <p className="text-secondary" style={{ fontSize: '1.1rem' }}>Bypass the 15.3% Self-Employment Tax penalty on your &quot;Full Ride&quot; scholarship overflow.</p>
         </div>
       </div>
+
+      {/* Disclaimers & Warnings */}
+      {(summaryData?.disclaimer || (summaryData?.warnings && summaryData.warnings.length > 0)) && (
+        <div style={{ marginBottom: '2rem', padding: '1.25rem', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '10px' }}>
+          {summaryData?.disclaimer && (
+            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: summaryData?.warnings && summaryData.warnings.length > 0 ? '0.75rem' : 0 }}>
+              <Info size={18} color="var(--accent-blue)" style={{ flexShrink: 0, marginTop: '2px' }} />
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
+                <strong>Statutory Estimate Disclaimer:</strong> {summaryData.disclaimer}
+              </p>
+            </div>
+          )}
+          {summaryData?.warnings && summaryData.warnings.length > 0 && (
+            <div style={{ borderTop: summaryData?.disclaimer ? '1px solid var(--border-color)' : 'none', paddingTop: summaryData?.disclaimer ? '0.5rem' : 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-red)', marginBottom: '0.3rem' }}>
+                <AlertTriangle size={16} /> Tax Model Notices:
+              </div>
+              <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                {summaryData.warnings.map((w, idx) => (
+                  <li key={idx}>{w.message}{w.amount ? ` (~$${w.amount})` : ''}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '2rem' }}>
         
@@ -187,12 +232,12 @@ export default function StudentHub() {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem', background: 'rgba(0, 200, 230, 0.05)', borderRadius: '8px', border: '1px dashed var(--accent-blue)' }}>
-              <span style={{ color: 'var(--accent-blue)' }}>"Textbook Loophole" Auto-Detected</span>
+              <span style={{ color: 'var(--accent-blue)' }}>&quot;Textbook Loophole&quot; Auto-Detected (§117)</span>
               <strong style={{ color: 'var(--accent-blue)' }}>-{formatCurrency(textbookSavings)}</strong>
             </div>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
-              <span className="text-secondary">Final Taxable Scholarship</span>
+              <span className="text-secondary">Schedule 1 Line 8r Taxable Scholarship</span>
               <div style={{ fontSize: '1.3rem', fontWeight: 700 }}>
                 {formatCurrency(ultimateTaxableScholarship)}
               </div>
@@ -203,9 +248,9 @@ export default function StudentHub() {
             <div className="animate-slide-up" style={{ marginTop: '2rem', padding: '1rem', background: 'rgba(0, 200, 5, 0.05)', border: '1px solid var(--accent-green)', borderRadius: '8px', display: 'flex', gap: '0.5rem', color: 'var(--accent-green)' }}>
               <TrendingDown size={28} style={{ flexShrink: 0 }} />
               <div>
-                <strong style={{ fontSize: '1.1rem', marginBottom: '0.2rem', display: 'block' }}>Engine Protected: {formatCurrency(mistakenSETax)}</strong>
+                <strong style={{ fontSize: '1.1rem', marginBottom: '0.2rem', display: 'block' }}>Schedule 1 Line 8r Exemption Active</strong>
                 <p style={{ fontSize: '0.9rem', lineHeight: 1.4 }}>
-                  Generic gig-worker apps would misclassify this University refund as un-taxed income. By isolating this as academic overflow, we legally bypassed the 15.3% Self-Employment mandate!
+                  Generic gig-worker apps misclassify University disbursements as self-employment income. By isolating this as academic overflow under Schedule 1 line 8r, the engine ensures 0% Self-Employment Tax applies!
                 </p>
               </div>
             </div>
@@ -221,7 +266,7 @@ export default function StudentHub() {
         </div>
         <div>
           <h1 style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>1098-E Loan Interest</h1>
-          <p className="text-secondary" style={{ fontSize: '1.1rem' }}>Automatically trigger a lucrative $2,500 'Above-the-Line' tax deduction against your Gig Income.</p>
+          <p className="text-secondary" style={{ fontSize: '1.1rem' }}>Trigger an &apos;Above-the-Line&apos; tax deduction against your Gross Income (IRC §221, capped at $2,500).</p>
         </div>
       </div>
 
@@ -289,9 +334,9 @@ export default function StudentHub() {
             </div>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
-              <span className="text-secondary">Estimated Cash Savings</span>
+              <span className="text-secondary">Schedule 1 Line 21 AGI Adjustment</span>
               <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent-green)' }}>
-                {formatCurrency(loanEstimatedSavings)}
+                -{formatCurrency(loanInterestDeducted)}
               </div>
             </div>
           </div>
@@ -304,9 +349,9 @@ export default function StudentHub() {
           <AlertCircle size={24} color="var(--text-secondary)" />
         </div>
         <div>
-          <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>How the "Taxable Overflow" works</h3>
+          <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>How the &quot;Taxable Overflow&quot; works</h3>
           <p className="text-secondary" style={{ lineHeight: 1.6, maxWidth: '90%' }}>
-            If your scholarships (Box 5) exceed your tuition (Box 1), you are considered to have a "Full Ride" payout. The IRS requires you to report the excess overflow as standard taxable income since you use it to pay for generic living expenses (rent, food). However, you DO NOT owe the brutal 15.3% Self-Employment (SE) Tax on it like you do for your freelance gig-work (Uber, DoorDash). This dashboard mathematically segregates your income streams to ensure you aren't severely overcharged by the IRS.
+            If your scholarships (Box 5) exceed your tuition (Box 1), you are considered to have a &quot;Full Ride&quot; payout. The IRS requires you to report the excess overflow as standard taxable income since you use it to pay for generic living expenses (rent, food). However, you DO NOT owe the brutal 15.3% Self-Employment (SE) Tax on it like you do for your freelance gig-work (Uber, DoorDash). This dashboard mathematically segregates your income streams to ensure you aren&apos;t severely overcharged by the IRS.
           </p>
         </div>
       </div>

@@ -3,7 +3,9 @@ import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import {
   buildFederalTaxInput,
+  computeStandardMileageDeduction,
   estimateFederalTax,
+  getTaxYearParameters,
   isSupportedTaxYear,
   latestSupportedTaxYear,
   SUPPORTED_TAX_YEARS,
@@ -12,6 +14,7 @@ import {
   toPlain,
   type SourceBucket,
   type Warning,
+  ZERO,
 } from '@/lib/tax';
 
 /**
@@ -66,7 +69,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const [userRecord, transactions] = await Promise.all([
+    const [userRecord, transactions, mileageLogs] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         include: { form1098T: true, form1098E: true, homeOffice: true },
@@ -77,6 +80,12 @@ export async function GET(request: NextRequest) {
           date: { gte: new Date(Date.UTC(taxYear, 0, 1)), lt: new Date(Date.UTC(taxYear + 1, 0, 1)) },
         },
         include: { incomeSource: { select: { name: true, type: true } } },
+      }),
+      prisma.mileageLog.findMany({
+        where: {
+          userId,
+          date: { gte: new Date(Date.UTC(taxYear, 0, 1)), lt: new Date(Date.UTC(taxYear + 1, 0, 1)) },
+        },
       }),
     ]);
 
@@ -89,6 +98,17 @@ export async function GET(request: NextRequest) {
       homeOffice: userRecord?.homeOffice,
     });
     const estimate = estimateFederalTax(built.input);
+
+    // Price logged business miles for the tax year
+    let totalMiles = ZERO;
+    let totalMileageDeduction = ZERO;
+    const mileageParams = getTaxYearParameters(taxYear);
+    for (const log of mileageLogs) {
+      const isoDate = log.date.toISOString().slice(0, 10);
+      const res = computeStandardMileageDeduction(log.miles, isoDate, mileageParams);
+      totalMiles = totalMiles.plus(res.miles);
+      totalMileageDeduction = totalMileageDeduction.plus(res.deduction);
+    }
 
     // Cash view for the "safe to spend" card: what actually landed in the bank
     // as income, less everything spent (deductible or not), less the estimated tax.
@@ -116,10 +136,8 @@ export async function GET(request: NextRequest) {
         },
         delivery: {
           ...bucket(built.bySource.delivery),
-          // No mileage is logged anywhere yet. Zero is the honest value; the
-          // previous "amount x 0.25" figure was invented. Logged mileage is Phase 3
-          // (see src/lib/tax/mileage.ts for the rate function it will use).
-          mileage: 0,
+          mileage: toNumber(totalMiles),
+          mileageDeduction: toNumber(totalMileageDeduction),
         },
         other: bucket(built.bySource.other),
         scholarships: {
