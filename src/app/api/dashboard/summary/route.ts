@@ -1,138 +1,153 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { NextResponse, type NextRequest } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { prisma } from '@/lib/prisma';
+import {
+  buildFederalTaxInput,
+  estimateFederalTax,
+  isSupportedTaxYear,
+  latestSupportedTaxYear,
+  SUPPORTED_TAX_YEARS,
+  TaxInputError,
+  toNumber,
+  toPlain,
+  type SourceBucket,
+  type Warning,
+} from '@/lib/tax';
 
-export async function GET() {
+/**
+ * GET /api/dashboard/summary[?taxYear=YYYY]
+ *
+ * Runs the federal tax estimate for the signed-in user. All arithmetic lives
+ * in `src/lib/tax`; this handler only loads rows, hands them to the adapter,
+ * and shapes the response.
+ *
+ * Response (superset of the previous shape, so existing pages keep working):
+ *   taxYear, filingStatus, disclaimer
+ *   summary.gross          Form 1040 line 9 total income
+ *   summary.taxLiability   Form 1040 line 24 total tax (income tax + SE tax + Additional Medicare)
+ *   summary.net            "safe to spend": deposits counted as income - every expense - total tax
+ *   sources.*              per-source display totals (grouped by IncomeSource.type, never by name)
+ *   estimate               the full line-by-line computation with citations, warnings and assumptions
+ *   warnings, assumptions, notModeled
+ *
+ * `disclaimer` must be rendered wherever `summary.taxLiability` (or any other
+ * liability figure) is shown. It is returned on every successful response so
+ * the UI never has to invent or omit it.
+ *
+ * Money arrives from Prisma as `Prisma.Decimal` (the columns are DECIMAL(12,2))
+ * and is only converted to JS numbers at the very end, by `toNumber`/`toPlain`.
+ */
+export async function GET(request: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  // Tax year: explicit query parameter, else the current calendar year, else
+  // the latest year we have parameters for (flagged, never silent).
+  const routeWarnings: Warning[] = [];
+  let taxYear: number;
+  const requested = request.nextUrl.searchParams.get('taxYear');
+  if (requested !== null) {
+    const parsed = Number(requested);
+    if (!isSupportedTaxYear(parsed)) {
+      return NextResponse.json({ error: `taxYear must be one of ${SUPPORTED_TAX_YEARS.join(', ')}` }, { status: 400 });
+    }
+    taxYear = parsed;
+  } else {
+    const currentYear = new Date().getUTCFullYear();
+    if (isSupportedTaxYear(currentYear)) {
+      taxYear = currentYear;
+    } else {
+      taxYear = latestSupportedTaxYear();
+      routeWarnings.push({
+        code: 'tax_year_fallback',
+        message: `Tax parameters for ${currentYear} are not loaded yet, so ${taxYear} rules were applied to ${currentYear} transactions.`,
+      });
+    }
+  }
+
   try {
-    const userRecord = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { form1098T: true, form1098E: true, homeOffice: true }
+    const [userRecord, transactions] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        include: { form1098T: true, form1098E: true, homeOffice: true },
+      }),
+      prisma.transaction.findMany({
+        where: {
+          userId,
+          date: { gte: new Date(Date.UTC(taxYear, 0, 1)), lt: new Date(Date.UTC(taxYear + 1, 0, 1)) },
+        },
+        include: { incomeSource: { select: { name: true, type: true } } },
+      }),
+    ]);
+
+    const built = buildFederalTaxInput({
+      taxYear,
+      transactions,
+      user: userRecord,
+      form1098T: userRecord?.form1098T,
+      form1098E: userRecord?.form1098E,
+      homeOffice: userRecord?.homeOffice,
     });
+    const estimate = estimateFederalTax(built.input);
 
-    const transactions = await prisma.transaction.findMany({
-      where: { userId },
-      include: { incomeSource: true }
-    });
+    // Cash view for the "safe to spend" card: what actually landed in the bank
+    // as income, less everything spent (deductible or not), less the estimated tax.
+    const net = built.cashIncomeTotal.minus(built.cashExpensesTotal).minus(estimate.totalTax);
 
-    let gross = 0;
-    let net = 0;
-    let taxLiability = 0;
-    
-    // Simplistic calculation for MVP
-    const expenses = transactions.filter(t => t.type === 'Expense');
-    
-    // Prevent Double Counting
-    const income = transactions.filter(t => {
-      if (t.type !== 'Income') return false;
-      
-      const desc = (t.description ?? '').toLowerCase();
-      const isAcademicRefund = desc.includes('university') || desc.includes('college') || desc.includes('financial aid') || desc.includes('bursar') || desc.includes('scholarship');
-      
-      // Sweep Loan Disbursements out of Gross Income
-      const isLoanDisbursement = desc.includes('loan') || desc.includes('navient') || desc.includes('nelnet') || desc.includes('dept of ed') || desc.includes('education department') || desc.includes('mohela');
-
-      if (isLoanDisbursement) {
-        return false;
-      }
-      
-      if (userRecord?.form1098T && isAcademicRefund) {
-        return false;
-      }
-      return true;
-    });
-
-    gross = income.reduce((sum, t) => sum + t.amount, 0);
-    const totalDeductions = expenses.filter(t => t.taxDeductible).reduce((sum, t) => sum + t.amount, 0);
-    
-    // --- HOME OFFICE ENGINE ---
-    let optimalHomeOfficeDeduction = 0;
-    if (userRecord?.homeOffice) {
-      const { totalSqFt, officeSqFt, rentAmount, utilitiesAmount } = userRecord.homeOffice;
-      // Method 1: Simplified ($5 per sqft up to 300)
-      const simplified = Math.min(officeSqFt, 300) * 5;
-      
-      // Method 2: Standard (Percentage of Total Expenses)
-      const businessPercentage = totalSqFt > 0 ? (officeSqFt / totalSqFt) : 0;
-      // Monthly expenses annualized
-      const annualHousingCost = (rentAmount + utilitiesAmount) * 12;
-      const standard = annualHousingCost * businessPercentage;
-      
-      // Auto-Optimizer identifies the highest legal shield. Protect against NaN if missing data.
-      optimalHomeOfficeDeduction = Math.max(simplified, standard) || 0;
-    }
-    
-    // --- 1098-T ENGINE UPGRADE ---
-    // Calculate Taxable Scholarships vs Gig Income
-    let taxableScholarships = 0;
-    let textbookDeductions = 0;
-    
-    if (userRecord?.form1098T && userRecord.form1098T.box5 > userRecord.form1098T.box1) {
-      textbookDeductions = expenses
-        .filter(t => {
-          const desc = (t.description ?? '').toLowerCase();
-          return desc.includes('bookstore') || desc.includes('chegg') || desc.includes('textbook') || desc.includes('amazon');
-        })
-        .reduce((sum, t) => sum + t.amount, 0);
-      
-      taxableScholarships = Math.max(0, (userRecord.form1098T.box5 - userRecord.form1098T.box1) - textbookDeductions);
-      gross += taxableScholarships;
-    }
-
-    // 1. Business Profit (Gig Income minus Normal Deductions minus Home Office Loophole)
-    // Home office wipes out business profit (reducing SE tax) but cannot create a net business loss (bounded to 0).
-    const businessNet = Math.max(0, income.reduce((sum, t) => sum + t.amount, 0) - totalDeductions - optimalHomeOfficeDeduction);
-    
-    // 2. Self-Employment Tax (only impacts business net, NOT scholarships)
-    const seTax = businessNet * 0.153; 
-    
-    // 3. Generic Income Tax (applies to both)
-    let loanInterestDeduction = 0;
-    if (userRecord?.form1098E) {
-      loanInterestDeduction = Math.min(2500, userRecord.form1098E.box1);
-    }
-    
-    const totalTaxableIncome = Math.max(0, businessNet + taxableScholarships - loanInterestDeduction);
-    const incomeTax = totalTaxableIncome * 0.12; 
-
-    taxLiability = seTax + incomeTax;
-    
-    const actualCashExpenses = expenses.reduce((sum, t) => sum + t.amount, 0);
-    net = gross - taxLiability - actualCashExpenses;
-
-    const sources = {
-      freelance: { income: 0, deductions: totalDeductions, homeOfficeDeduction: optimalHomeOfficeDeduction },
-      delivery: { income: 0, mileage: 0 },
-      scholarships: { taxable: taxableScholarships, textbookSavings: textbookDeductions, loanInterestDeduction },
-    };
-
-    transactions.forEach(t => {
-      const sType = t.incomeSource?.type || '';
-      const sName = t.incomeSource?.name || '';
-      
-      if (sType === 'Freelance' || sName.toLowerCase().includes('freelance')) {
-        if (t.type === 'Income') sources.freelance.income += t.amount;
-        if (t.type === 'Expense' && t.taxDeductible) sources.freelance.deductions += t.amount;
-      } 
-      else if (sType === 'Delivery' || sName.toLowerCase().includes('delivery') || sName.includes('Unknown Bank Deposit') || !sName.toLowerCase().includes('freelance')) {
-        // Fallback any generic Plaid delivery/bank income to delivery for wildcard
-        if (t.type === 'Income') sources.delivery.income += t.amount;
-        // Mock computation: 1 mile per $0.25 cents for mockup
-        if (t.type === 'Income') sources.delivery.mileage += Math.round(t.amount * 0.25); 
-      }
+    const bucket = (b: SourceBucket) => ({
+      income: toNumber(b.income),
+      deductions: toNumber(b.deductibleExpenses),
     });
 
     return NextResponse.json({
+      taxYear,
+      filingStatus: estimate.filingStatus,
+      filingStatusSource: built.filingStatusSource,
+      disclaimer: estimate.disclaimer,
       summary: {
-        gross: Math.round(gross),
-        net: Math.round(net),
-        taxLiability: Math.round(taxLiability),
+        gross: toNumber(estimate.income.totalIncome),
+        net: toNumber(net),
+        taxLiability: toNumber(estimate.totalTax),
       },
-      sources: sources
+      sources: {
+        freelance: {
+          ...bucket(built.bySource.freelance),
+          homeOfficeDeduction: toNumber(estimate.scheduleC.homeOfficeDeduction),
+        },
+        delivery: {
+          ...bucket(built.bySource.delivery),
+          // No mileage is logged anywhere yet. Zero is the honest value; the
+          // previous "amount x 0.25" figure was invented. Logged mileage is Phase 3
+          // (see src/lib/tax/mileage.ts for the rate function it will use).
+          mileage: 0,
+        },
+        other: bucket(built.bySource.other),
+        scholarships: {
+          taxable: toNumber(estimate.income.taxableScholarships),
+          textbookSavings: estimate.scholarships ? toNumber(estimate.scholarships.requiredCourseMaterials) : 0,
+          loanInterestDeduction: estimate.adjustments.studentLoanInterest ? toNumber(estimate.adjustments.studentLoanInterest.deduction) : 0,
+        },
+      },
+      transactions: {
+        included: built.included,
+        excludedIncome: built.excludedIncome.map((x) => ({ category: x.category, count: x.count, total: toNumber(x.total) })),
+        uncategorised: {
+          incomeCount: built.uncategorised.incomeCount,
+          incomeTotal: toNumber(built.uncategorised.incomeTotal),
+          expenseCount: built.uncategorised.expenseCount,
+        },
+      },
+      estimate: toPlain(estimate),
+      warnings: [...routeWarnings, ...built.warnings, ...estimate.warnings],
+      assumptions: [...built.assumptions, ...estimate.assumptions],
+      notModeled: estimate.notModeled,
     });
   } catch (error) {
+    if (error instanceof TaxInputError) {
+      // Bad stored data (a negative box amount, an office larger than the home). Say what, not just that.
+      return NextResponse.json({ error: error.message }, { status: 422 });
+    }
+    console.error('Failed to compute dashboard summary:', error);
     return NextResponse.json({ error: 'Failed to fetch dashboard data' }, { status: 500 });
   }
 }

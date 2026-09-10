@@ -25,6 +25,8 @@ The app tells people what they may owe the IRS. Invented numbers are the main ri
 
 Single `.env` file at the repo root — **not** `.env.local`. The Prisma CLI reads only `.env`; Next.js reads both. One file keeps `prisma db push` and `next dev` on the same values. Copy `.env.example` to start.
 
+Schema changes ship as SQL under `prisma/migrations/` (see the README there). An existing database created with `prisma db push` is baselined once with `prisma migrate resolve --applied 20260909000000_init`, then `prisma migrate deploy`.
+
 Neon needs **two** connection strings: `DATABASE_URL` (pooled, hostname has `-pooler`) for the app, and `DATABASE_URL_UNPOOLED` (direct) for migrations. Both are already wired in `prisma/schema.prisma`.
 
 ## Phases
@@ -33,7 +35,7 @@ Neon needs **two** connection strings: `DATABASE_URL` (pooled, hostname has `-po
 |---|---|---|---|
 | 0 — Boot | Opus 5 | Install, security patches, green build, Neon connected | **Done** |
 | 1 — Stop the bleeding | Opus 5 | User bootstrap, Plaid consolidation, idempotent sync, token encryption, auth gating | **Done** |
-| 2 — Tax engine | Fable 5.1 writes → Astra audits | `src/lib/tax/`, plus `Float` → `Decimal` migration | Ready |
+| 2 — Tax engine | Fable 5.1 writes → Astra audits | `src/lib/tax/`, plus `Float` → `Decimal` migration | **Built** on `phase-2-tax-engine`; awaiting Astra's audit and the Neon branch migration run |
 | 3 — Real data | Gemini 3.8 Flash | Real chart aggregation, mileage as logged entry, transaction edit/delete | Blocked on 2 |
 | 4 — Design | Fable 5.1 designs → Gemini converts | Enable Tailwind, component set, kill inline styles, responsive | Blocked on 2 |
 | 5 — E2E + ship | Astra drives → Opus 5 integrates | Browser-driven verification, PDF export, Vercel | Blocked on all |
@@ -76,12 +78,19 @@ Fixed in Phase 1:
 - **`prisma/seed.ts` called `deleteMany()` unfiltered on User, IncomeSource and Transaction** — running it wiped every account in the database, not just the demo one. Now requires `SEED_USER_ID`, refuses non-Clerk ids, and scopes deletes.
 - Sync no longer auto-marks "Food and Drink" / "Shops" as `taxDeductible` — that flagged groceries as business expenses and understated tax owed. Defaults to false; real categorisation is Phase 2.
 
+Fixed in Phase 2 (branch `phase-2-tax-engine`, pending audit):
+- **The tax calculation was invented.** Flat 12% with no brackets or standard deduction, 15.3% SE tax on the whole net profit, no QBI deduction. Replaced by `src/lib/tax/`: pure functions in Form 1040 order, every rule cited (IRC, Rev. Procs, form instructions), every function tested with hand-worked answers. Filing status and tax year are inputs; 2024–2026 parameters are transcribed from the Rev. Procs and self-checked by tests.
+- **Deduction detection was string matching** on descriptions. Replaced by `Transaction.category` (nullable; vocabulary and tax treatment in `src/lib/tax/categories.ts`). Uncategorised income defaults to business income with a warning; uncategorised expenses follow the `taxDeductible` flag. Descriptions are never read.
+- **Money was `Float`.** Eight columns across four tables are now `DECIMAL(12,2)`; the migration SQL is committed and was verified against Postgres 18 with float fixtures. `User.filingStatus` and `User.claimedAsDependent` added (defaults: `single`, `false`).
+- **Mileage is no longer invented** in the summary (`0` until Phase 3 logs miles; `src/lib/tax/mileage.ts` prices logged miles at the year's rate).
+- **Disclaimer** is part of every estimate (`disclaimer` in the summary response and in `FederalTaxEstimate`). Phase 4 must render it wherever a liability figure appears.
+- The summary now covers only the tax year's transactions (default: current year, `?taxYear=` to override) and returns the full line-by-line `estimate` with `warnings`, `assumptions` and `notModeled`.
+
 Still open:
 - **The chart is hardcoded.** `api/dashboard/chart` returns seven literal month objects. It claims $36,000 gross against $47,500 of real data. (Phase 3)
-- **Mileage is invented** — `amount * 0.25`, labeled "mock computation" in the source, rendered as a real number. (Phase 3)
-- **Deduction detection is string matching** on `description.includes('amazon')`. (Phase 2)
-- **Money is stored as `Float`.** Needs `Decimal(12,2)`. Migration verified as a plain `ALTER COLUMN ... SET DATA TYPE` — safe against existing rows. (Phase 2)
+- **Mileage has no data source yet.** The summary returns `0` (the old `amount * 0.25` is gone); Phase 3 adds logged entries priced by `src/lib/tax/mileage.ts`. (Phase 3)
 - **Tailwind 4 is installed but dead** — `globals.css` never imports it; everything is inline styles. (Phase 4)
 - Two component directories: `src/app/components/` and `src/components/`. (Phase 4)
 - An orphaned demo user (cuid id, 4 transactions) left over from the old seed script — invisible to the app, safe to delete.
 - Stale `dev.db` / `prisma/dev.db` still tracked in git.
+- `GET /api/transactions` now serialises `amount` as a decimal string (Prisma.Decimal → JSON). The pages coerce it fine via `Intl.NumberFormat`; Phase 3 should decide whether the API returns numbers. Pages still duplicate engine arithmetic locally (`student/page.tsx` assumes 12%, `office/page.tsx` assumes 27.3%); Phase 4 should read `estimate` instead. (Phases 3–4)

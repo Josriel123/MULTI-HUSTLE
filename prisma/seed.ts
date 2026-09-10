@@ -82,6 +82,7 @@ async function main() {
         type: 'Income',
         date: day(5, 1),
         description: 'Contract Work',
+        category: 'business_income',
         userId,
         incomeSourceId: freelance.id,
       },
@@ -91,6 +92,8 @@ async function main() {
         date: day(5, 5),
         description: 'Hardware written off',
         taxDeductible: true,
+        // Under the $2,500 de minimis safe harbor, so deductible in full (see src/lib/tax/categories.ts).
+        category: 'equipment',
         userId,
         incomeSourceId: freelance.id,
       },
@@ -99,6 +102,7 @@ async function main() {
         type: 'Income',
         date: day(6, 1),
         description: 'Uber payouts',
+        category: 'business_income',
         userId,
         incomeSourceId: delivery.id,
       },
@@ -107,6 +111,9 @@ async function main() {
         type: 'Income',
         date: day(7, 1),
         description: 'Stock Sales',
+        // Sale proceeds are not income (only the gain is, on Schedule D). The
+        // engine excludes this category and says so in a warning.
+        category: 'investment_proceeds',
         userId,
         incomeSourceId: trading.id,
       },
