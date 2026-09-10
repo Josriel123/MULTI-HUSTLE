@@ -1,39 +1,24 @@
 import { NextResponse } from 'next/server';
-import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
+import { CountryCode, Products } from 'plaid';
 import { auth } from '@clerk/nextjs/server';
+import { plaidClient, describePlaidError } from '@/lib/plaid';
 
-const configuration = new Configuration({
-  basePath: PlaidEnvironments.sandbox, // Always use sandbox for development
-  baseOptions: {
-    headers: {
-      'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
-      'PLAID-SECRET': process.env.PLAID_SECRET,
-    },
-  },
-});
+export async function POST() {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-const plaidClient = new PlaidApi(configuration);
-
-export async function POST(req: Request) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const createTokenResponse = await plaidClient.linkTokenCreate({
-      user: {
-        client_user_id: userId,
-      },
+      user: { client_user_id: userId },
       client_name: 'Multi-Hustle FinOS',
-      products: ['auth', 'transactions'] as any,
-      country_codes: ['US'] as any,
+      products: [Products.Transactions],
+      country_codes: [CountryCode.Us],
       language: 'en',
     });
 
     return NextResponse.json(createTokenResponse.data);
-  } catch (error: any) {
-    console.error('Error generating Plaid Link Token:', error.response?.data || error.message);
+  } catch (error) {
+    console.error('Error generating Plaid Link Token:', describePlaidError(error));
     return NextResponse.json({ error: 'Failed to generate link token' }, { status: 500 });
   }
 }

@@ -1,21 +1,18 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@clerk/nextjs/server';
+import { requireUser } from '@/lib/user';
 
 export async function POST(req: Request) {
-  const { userId } = await auth();
+  // The inline user upsert that used to live here is now `requireUser`, shared
+  // by every write route — it was the only place a User row got created, which
+  // is why every other form failed on a foreign key for new accounts.
+  const userId = await requireUser();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
     const data = await req.json();
     const { amount, type, description, taxDeductible, sourceName } = data;
-
-    // VERY MINIMAL UPSERT OF USER TO ENSURE DB INTEGRITY WITHOUT WEBHOOKS
-    await prisma.user.upsert({
-      where: { id: userId },
-      update: {},
-      create: { id: userId, name: 'Clerk Client', email: `${userId}@multi-hustle.app` }
-    });
 
     // Find the associated income source (e.g. "Freelance Dev Income")
     let incomeSource = null;

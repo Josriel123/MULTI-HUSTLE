@@ -3,8 +3,12 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Pooled connection (hostname contains "-pooler") — used by the app at runtime.
+  url       = env("DATABASE_URL")
+  // Direct connection — required by `prisma migrate` / `prisma db push`,
+  // which need session-level control the pooler doesn't provide.
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 model User {
@@ -43,6 +47,13 @@ model Transaction {
   user           User         @relation(fields: [userId], references: [id])
   incomeSourceId String?
   incomeSource   IncomeSource? @relation(fields: [incomeSourceId], references: [id])
+
+  // Plaid's transaction_id. Null for manually entered transactions.
+  // Unique so re-running a sync updates rather than duplicates — without this,
+  // every sync re-inserted the whole page of results.
+  plaidTransactionId String? @unique
+
+  @@index([userId, date])
 }
 
 model PlaidConnection {

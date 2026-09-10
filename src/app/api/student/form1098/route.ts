@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@clerk/nextjs/server';
+import { requireUser } from '@/lib/user';
 
 export async function GET() {
   const { userId } = await auth();
@@ -17,7 +18,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const { userId } = await auth();
+  // requireUser, not auth: this upserts a row with a User foreign key.
+  const userId = await requireUser();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
