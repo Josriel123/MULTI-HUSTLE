@@ -35,10 +35,37 @@ Neon needs **two** connection strings: `DATABASE_URL` (pooled, hostname has `-po
 |---|---|---|---|
 | 0 — Boot | Opus 5 | Install, security patches, green build, Neon connected | **Done** |
 | 1 — Stop the bleeding | Opus 5 | User bootstrap, Plaid consolidation, idempotent sync, token encryption, auth gating | **Done** |
-| 2 — Tax engine | Fable 5.1 writes → Astra audits | `src/lib/tax/`, plus `Float` → `Decimal` migration | **Built** on `phase-2-tax-engine`; migrations **applied to main** 2026-09-09 (26 transactions verified intact); awaiting Astra's audit and merge |
-| 3 — Real data | Gemini 3.8 Flash | Real chart aggregation, mileage as logged entry, transaction edit/delete | Blocked on 2 |
-| 4 — Design | Fable 5.1 designs → Gemini converts | Enable Tailwind, component set, kill inline styles, responsive | Blocked on 2 |
+| 2 — Tax engine | Fable 5.1 wrote → Astra audited → Fable fixed | `src/lib/tax/`, plus `Float` → `Decimal` migration | **Done** — merged to `master`. Audited independently (11 findings, [triaged](docs/audits/federal-tax-2026-09-09/TRIAGE.md) and fixed); 161 tests, 270/270 boundary probes. Migrations applied to the main Neon DB 2026-09-09. |
+| 3 — Real data | Gemini 3.8 Flash | Real chart aggregation, mileage as logged entry, transaction edit/delete | **Ready** |
+| 4 — Design | Fable 5.1 designs → Gemini converts | Enable Tailwind, component set, kill inline styles, responsive | **Ready** (see the Phase 3/4 note below) |
 | 5 — E2E + ship | Astra drives → Opus 5 integrates | Browser-driven verification, PDF export, Vercel | Blocked on all |
+
+### Note for Phases 3 and 4: the pages don't use the engine yet
+
+Phase 2 delivered a correct engine. It did **not** change what the dashboard
+displays. The pages still duplicate tax arithmetic locally, including the old
+flat-12% assumption, so **the UI currently shows wrong numbers on top of
+correct code**. Fixing that is the single highest-value item left.
+
+Concretely, for whoever picks up Phase 3 or 4:
+
+- Read the `estimate` payload from the engine instead of recomputing anything
+  in a component. If a `.tsx` file does arithmetic on money, that's a bug.
+- `GET /api/transactions` serialises amounts as decimal **strings** (Prisma
+  `Decimal` → JSON). Phase 3 owns deciding that contract; don't paper over it
+  with `parseFloat` in a component.
+- Every liability figure must render the `disclaimer` string that comes back
+  with the estimate, and the `warnings` array. The engine deliberately returns
+  them alongside the number so a caller can't show one without the other —
+  don't break that by dropping them.
+- The estimate omits tax credits, so it runs **high**. Don't present it as a
+  bill.
+
+Five input fields added in Phase 2 have no database column or UI yet: W-2 box 7
+tips, W-2 box 6 Medicare withholding, joint-return W-2 ownership, MFS
+spouse-itemizes, and restricted scholarship amounts. They're optional, and the
+engine warns when a missing one matters — so shipping without them is safe,
+just less precise.
 
 ## File ownership
 
