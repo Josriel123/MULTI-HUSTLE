@@ -123,3 +123,187 @@ export async function saveHomeOfficeForm(input: HomeOfficeFormInput): Promise<vo
     }),
   );
 }
+
+export interface IncomeSourceItem {
+  id?: string;
+  name: string;
+  type: string;
+}
+
+export interface TransactionItem {
+  id: string;
+  amount: string;
+  type: string;
+  date: string;
+  description: string | null;
+  taxDeductible: boolean;
+  category: string | null;
+  plaidTransactionId: string | null;
+  incomeSource: IncomeSourceItem | null;
+}
+
+export interface CreateTransactionInput {
+  amount: string | number;
+  type: string;
+  description?: string;
+  category: string;
+  sourceName?: string;
+  taxDeductible?: boolean;
+  date: string;
+}
+
+export interface UpdateTransactionInput {
+  amount?: string | number;
+  date?: string;
+  description?: string;
+  category?: string;
+  taxDeductible?: boolean;
+}
+
+/** GET /api/transactions */
+export async function fetchTransactions(taxYear?: number): Promise<TransactionItem[]> {
+  const res = await readJson<TransactionItem[]>(await fetch(withYear('/api/transactions', taxYear)));
+  return Array.isArray(res) ? res : [];
+}
+
+/** POST /api/transactions */
+export async function createTransaction(data: CreateTransactionInput): Promise<TransactionItem> {
+  return readJson<TransactionItem>(
+    await fetch('/api/transactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+  );
+}
+
+/** PATCH /api/transactions/[id] */
+export async function updateTransaction(id: string, data: UpdateTransactionInput): Promise<TransactionItem> {
+  return readJson<TransactionItem>(
+    await fetch(`/api/transactions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+  );
+}
+
+/** DELETE /api/transactions/[id] */
+export async function deleteTransaction(id: string): Promise<void> {
+  await readJson<{ success: boolean }>(
+    await fetch(`/api/transactions/${id}`, {
+      method: 'DELETE',
+    }),
+  );
+}
+
+export interface MileageLogItem {
+  id: string;
+  date: string;
+  miles: string;
+  purpose: string | null;
+  incomeSourceId: string | null;
+  incomeSource: IncomeSourceItem | null;
+  ratePerMile: string;
+  deduction: string;
+}
+
+export interface MileageResponse {
+  taxYear: number;
+  totalMiles: string;
+  totalDeduction: string;
+  logs: MileageLogItem[];
+  warnings?: TaxWarning[];
+}
+
+export interface CreateMileageInput {
+  date: string;
+  miles: string | number;
+  purpose?: string;
+  incomeSourceId?: string;
+}
+
+/** GET /api/mileage */
+export async function fetchMileage(taxYear?: number): Promise<MileageResponse> {
+  return readJson<MileageResponse>(await fetch(withYear('/api/mileage', taxYear)));
+}
+
+/** POST /api/mileage */
+export async function createMileage(data: CreateMileageInput): Promise<MileageLogItem> {
+  return readJson<MileageLogItem>(
+    await fetch('/api/mileage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+  );
+}
+
+/** DELETE /api/mileage/[id] */
+export async function deleteMileage(id: string): Promise<void> {
+  await readJson<{ success: boolean }>(
+    await fetch(`/api/mileage/${id}`, {
+      method: 'DELETE',
+    }),
+  );
+}
+
+export interface Form1098TResponse {
+  form: {
+    box1: string | number;
+    box5: string | number;
+  } | null;
+  taxYear: number;
+  warnings?: TaxWarning[];
+}
+
+export interface SaveForm1098TInput {
+  taxYear: number;
+  box1: string | number;
+  box5: string | number;
+}
+
+/** GET /api/student/form1098 */
+export async function fetchForm1098T(taxYear?: number): Promise<Form1098TResponse> {
+  return readJson<Form1098TResponse>(await fetch(withYear('/api/student/form1098', taxYear)));
+}
+
+/** POST /api/student/form1098 */
+export async function saveForm1098T(input: SaveForm1098TInput): Promise<void> {
+  await readJson<{ success: boolean }>(
+    await fetch('/api/student/form1098', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export interface Form1098EResponse {
+  form: {
+    box1: string | number;
+  } | null;
+  taxYear: number;
+  warnings?: TaxWarning[];
+}
+
+export interface SaveForm1098EInput {
+  taxYear: number;
+  box1: string | number;
+}
+
+/** GET /api/student/1098e */
+export async function fetchForm1098E(taxYear?: number): Promise<Form1098EResponse> {
+  return readJson<Form1098EResponse>(await fetch(withYear('/api/student/1098e', taxYear)));
+}
+
+/** POST /api/student/1098e */
+export async function saveForm1098E(input: SaveForm1098EInput): Promise<void> {
+  await readJson<{ success: boolean }>(
+    await fetch('/api/student/1098e', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+  );
+}

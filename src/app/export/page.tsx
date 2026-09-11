@@ -1,319 +1,301 @@
-"use client"
+'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Printer, FileText, CheckCircle2, TrendingUp, AlertCircle, Calendar, Info, AlertTriangle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Calendar, CheckCircle2, FileText, Printer, TrendingUp } from 'lucide-react';
+import { EstimateNotice } from '@/components/EstimateNotice';
+import { TaxYearSelect } from '@/components/TaxYearSelect';
+import {
+  fetchSummary,
+  fetchTransactions,
+  type SummaryResponse,
+  type TransactionItem,
+} from '@/components/api';
+import { categoryLabel, formatCurrency, formatMiles } from '@/components/format';
+import { Button } from '@/components/ui/Button';
+import { Busy } from '@/components/ui/Busy';
+import { Card, CardHeader, CardTitle, DataRow } from '@/components/ui/Card';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { StatCard } from '@/components/ui/StatCard';
 
-interface TaxWarning {
-  code: string;
-  message: string;
-  amount?: string;
-}
-
-interface SummaryPayload {
-  disclaimer?: string;
-  warnings?: TaxWarning[];
-  summary?: {
-    gross: number;
-    net: number;
-    taxLiability: number;
-  };
-  sources?: {
-    freelance?: { income: number; deductions: number; homeOfficeDeduction?: number };
-    delivery?: { income: number; mileage: number; mileageDeduction?: number };
-    scholarships?: { taxable: number; textbookSavings: number; loanInterestDeduction: number };
-  };
-}
-
-interface TransactionExportItem {
-  id: string;
-  date: string;
-  type: string;
-  amount: string;
-  description?: string | null;
-  taxDeductible: boolean;
-  incomeSource?: { name: string } | null;
-}
-
+/**
+ * CPA Data Exporter & Tax Organizer.
+ *
+ * Prepares an IRS-aligned summary organizer for accountant review and prints
+ * cleanly to PDF with the specialized print stylesheet. Provides raw CSV ledger export.
+ * Zero local tax arithmetic: all figures are read directly from the engine summary.
+ */
 export default function CPAExporter() {
-  const [loading, setLoading] = useState(true);
-  const [summaryData, setSummaryData] = useState<SummaryPayload | null>(null);
-  const [transactionData, setTransactionData] = useState<TransactionExportItem[] | null>(null);
+  const [taxYear, setTaxYear] = useState<number | undefined>(undefined);
+  const [summaryData, setSummaryData] = useState<SummaryResponse | null>(null);
+  const [transactionData, setTransactionData] = useState<TransactionItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const [resolvedKey, setResolvedKey] = useState<string | null>(null);
+  const requestKey = taxYear === undefined ? 'default' : String(taxYear);
+  const loading = resolvedKey !== requestKey;
 
   useEffect(() => {
     let ignore = false;
-    async function fetchLedger() {
-      try {
-        const [sumRes, tpRes] = await Promise.all([
-          fetch('/api/dashboard/summary'),
-          fetch('/api/transactions')
-        ]);
-        const sum = await sumRes.json();
-        const txs = await tpRes.json();
-        
-        if (!ignore) {
-          setSummaryData(sum);
-          setTransactionData(txs);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        if (!ignore) {
-          setLoading(false);
-        }
-      }
-    }
-    fetchLedger();
+    Promise.all([fetchSummary(taxYear), fetchTransactions(taxYear)])
+      .then(([summary, transactions]) => {
+        if (ignore) return;
+        setSummaryData(summary);
+        setTransactionData(transactions);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (ignore) return;
+        console.error('Failed to load export data', err);
+        setError(err instanceof Error ? err.message : 'Failed to compile tax data.');
+      })
+      .finally(() => {
+        if (!ignore) setResolvedKey(requestKey);
+      });
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [taxYear, requestKey]);
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(val || 0);
-  };
+  const shownYear = summaryData?.taxYear ?? taxYear ?? new Date().getFullYear();
 
   const handlePrint = () => {
     window.print();
   };
 
-  const parseCSV = () => {
-    if (!transactionData || transactionData.length === 0) return alert("No transactions found.");
-    
-    // Generate headers
-    let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "Date,Type,Amount,Description,Is Tax Deductible,Source\n";
+  const exportCSV = () => {
+    if (!transactionData || transactionData.length === 0) {
+      alert('No transactions found for export.');
+      return;
+    }
 
-    transactionData.forEach((t: TransactionExportItem) => {
-      const date = new Date(t.date).toLocaleDateString() || '';
+    let csvContent = 'data:text/csv;charset=utf-8,';
+    csvContent += 'Date,Type,Amount,Category,Description,Is Tax Deductible,Source\n';
+
+    transactionData.forEach((t) => {
+      const date = t.date ? new Date(t.date).toISOString().slice(0, 10) : '';
       const type = t.type || '';
       const amount = t.amount || '0.00';
+      const category = `"${categoryLabel(t.category).replace(/"/g, '""')}"`;
       const desc = `"${(t.description || '').replace(/"/g, '""')}"`;
       const ded = t.taxDeductible ? 'YES' : 'NO';
-      const source = t.incomeSource?.name || 'Manual';
-      
-      csvContent += `${date},${type},${amount},${desc},${ded},${source}\n`;
+      const source = `"${(t.incomeSource?.name || (t.plaidTransactionId ? 'Plaid Sync' : 'Manual')).replace(/"/g, '""')}"`;
+
+      csvContent += `${date},${type},${amount},${category},${desc},${ded},${source}\n`;
     });
 
     const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `tax_ledger_export_${new Date().getFullYear()}.csv`);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `tax_ledger_export_${shownYear}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  if (loading) {
-    return <div style={{ padding: '2rem' }}>Compiling Tax Data...</div>;
-  }
+  const grossProp = summaryData?.summary.gross;
+  const taxProp = summaryData?.summary.taxLiability;
+  const netProp = summaryData?.summary.net;
 
-  const netProp = summaryData?.summary?.net ?? 0;
-  const grossProp = summaryData?.summary?.gross ?? 0;
-  const taxProp = summaryData?.summary?.taxLiability ?? 0;
+  const freeIncome = summaryData?.sources.freelance.income;
+  const freeDed = summaryData?.sources.freelance.deductions;
+  const hoDed = summaryData?.sources.freelance.homeOfficeDeduction;
 
-  const freeIncome = summaryData?.sources?.freelance?.income || 0;
-  const freeDed = summaryData?.sources?.freelance?.deductions || 0;
-  
-  const shipIncome = summaryData?.sources?.delivery?.income || 0;
-  const shipMile = summaryData?.sources?.delivery?.mileageDeduction ?? summaryData?.sources?.delivery?.mileage ?? 0;
+  const deliveryIncome = summaryData?.sources.delivery.income;
+  const deliveryMiles = summaryData?.sources.delivery.mileage;
+  const deliveryDeduction = summaryData?.sources.delivery.mileageDeduction;
 
-  const hoDed = summaryData?.sources?.freelance?.homeOfficeDeduction || 0;
-  
-  const scholarTax = summaryData?.sources?.scholarships?.taxable || 0;
-  const scholarText = summaryData?.sources?.scholarships?.textbookSavings || 0;
-  const scholarLoan = summaryData?.sources?.scholarships?.loanInterestDeduction || 0;
-
-  // The Current Tax Year
-  const taxYear = new Date().getFullYear();
+  const scholarTax = summaryData?.sources.scholarships.taxable;
+  const scholarText = summaryData?.sources.scholarships.textbookSavings;
+  const scholarLoan = summaryData?.sources.scholarships.loanInterestDeduction;
 
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto', paddingBottom: '4rem' }} className="animate-slide-up">
-      
+    <div className="mx-auto flex max-w-5xl flex-col gap-6 pb-12 md:gap-8">
       {/* Exporter Controls (Hidden on Print) */}
-      <div className="print-hide" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', background: 'var(--bg-card)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-        <div>
-          <h1 style={{ fontSize: '1.6rem', marginBottom: '0.25rem' }}>CPA Data Exporter</h1>
-          <p className="text-secondary">Generate universally accepted tax documents.</p>
-        </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <button onClick={parseCSV} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.2rem', borderRadius: '8px', background: '#333', color: '#fff', border: '1px solid #444', fontWeight: 600 }}>
-            <FileText size={18} />
-            Raw Ledger (.CSV)
-          </button>
-          <button onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.2rem', borderRadius: '8px', background: '#fff', color: '#000', fontWeight: 600 }}>
-            <Printer size={18} />
-            Print Organizer (PDF)
-          </button>
-        </div>
+      <div className="print-hide print:hidden">
+        <PageHeader
+          title="CPA Data Exporter"
+          description="Generate universally accepted tax organizers and export raw ledger data."
+          actions={
+            <div className="flex flex-wrap items-center gap-3">
+              <TaxYearSelect value={shownYear} onChange={setTaxYear} />
+              <Button
+                variant="secondary"
+                onClick={exportCSV}
+                icon={<FileText size={16} aria-hidden />}
+              >
+                Raw Ledger (.CSV)
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handlePrint}
+                icon={<Printer size={16} aria-hidden />}
+              >
+                Print Organizer (PDF)
+              </Button>
+            </div>
+          }
+        />
       </div>
+
+      {error && (
+        <div className="rounded-lg border border-danger bg-danger/10 p-4 text-sm text-danger print-hide print:hidden">
+          {error}
+        </div>
+      )}
 
       {/* ---------------- CPA DOCUMENT BODY ---------------- */}
-      <div id="cpa-document" style={{ width: '100%' }}>
-        
-        {/* Document Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '2rem' }}>
-          <div>
-            <h1 style={{ fontSize: '2.5rem', fontWeight: 800, margin: 0, letterSpacing: '-1px' }}>TAX ORGANIZER</h1>
-            <div style={{ fontSize: '1.2rem', color: 'var(--text-secondary)', marginTop: '0.3rem' }}>{taxYear} Independent Contractor & Student Summary</div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem', marginBottom: '0.3rem' }}>
-              <TrendingUp size={20} color="var(--text-primary)" />
-              <strong style={{ fontSize: '1.2rem' }}>Multi-Hustle OS Validation</strong>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.3rem', color: 'var(--text-secondary)' }}>
-              <CheckCircle2 size={16} /> Data cryptographically synchronized via Plaid API
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.3rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-               <Calendar size={16} /> Generated on {new Date().toLocaleDateString()}
-            </div>
-          </div>
-        </div>
-
-        <div className="card" style={{ padding: '0', background: 'transparent', border: 'none', boxShadow: 'none' }}>
-        
-        {/* Key KPI Row */}
-        <div style={{ display: 'flex', gap: '2rem', marginBottom: '1.5rem' }}>
-          <div style={{ flex: 1, padding: '1.5rem', border: '2px solid var(--border-color)', borderRadius: '8px', textAlign: 'center' }}>
-             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600, marginBottom: '0.5rem' }}>Total Gross Engine Input</p>
-             <h2 style={{ fontSize: '2.5rem', margin: 0 }}>{formatCurrency(grossProp)}</h2>
-          </div>
-          <div style={{ flex: 1, padding: '1.5rem', border: '2px solid var(--border-color)', borderRadius: '8px', textAlign: 'center' }}>
-             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600, marginBottom: '0.5rem' }}>Est. Total Tax Liability</p>
-             <h2 style={{ fontSize: '2.5rem', margin: 0 }}>{formatCurrency(taxProp)}</h2>
-             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>Before credits; not an amount owed</p>
-          </div>
-          <div style={{ flex: 1, padding: '1.5rem', background: 'var(--accent-green-dim)', border: '2px solid var(--accent-green)', borderRadius: '8px', textAlign: 'center' }}>
-             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600, marginBottom: '0.5rem' }}>Safe-To-Spend True Net</p>
-             <h2 style={{ fontSize: '2.5rem', margin: 0, color: 'var(--accent-green)' }}>{formatCurrency(netProp)}</h2>
-          </div>
-        </div>
-
-        {/* Statutory Disclaimer & Engine Warnings */}
-        {(summaryData?.disclaimer || (summaryData?.warnings && summaryData.warnings.length > 0)) && (
-          <div style={{ marginBottom: '2.5rem', padding: '1rem 1.25rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
-            {summaryData?.disclaimer && (
-              <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: summaryData?.warnings && summaryData.warnings.length > 0 ? '0.75rem' : 0 }}>
-                <Info size={18} color="var(--accent-blue)" style={{ flexShrink: 0, marginTop: '2px' }} />
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.4 }}>
-                  <strong>Statutory Estimate Disclaimer:</strong> {summaryData.disclaimer}
-                </p>
-              </div>
-            )}
-            {summaryData?.warnings && summaryData.warnings.length > 0 && (
-              <div style={{ borderTop: summaryData?.disclaimer ? '1px solid var(--border-color)' : 'none', paddingTop: summaryData?.disclaimer ? '0.5rem' : 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-red)', marginBottom: '0.3rem' }}>
-                  <AlertTriangle size={16} /> Auditor &amp; Modeler Notices:
-                </div>
-                <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  {summaryData.warnings.map((w, idx) => (
-                    <li key={idx}>{w.message}{w.amount ? ` (~$${w.amount})` : ''}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Section: Schedule C */}
-        <div style={{ marginBottom: '3rem', pageBreakInside: 'avoid' }}>
-           <h3 style={{ fontSize: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>
-             Part I: Schedule C Profit or Loss Form Parameters
-           </h3>
-           
-           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '2rem' }}>
-             
-             {/* General Freelance */}
-             <div>
-                <h4 style={{ fontWeight: 600, fontSize: '1.1rem', marginBottom: '1rem' }}>Freelance & Independent Contracts</h4>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', borderBottom: '1px solid var(--border-color)' }}>
-                  <span>Gross Receipts/Sales:</span>
-                  <span style={{ fontWeight: 600 }}>{formatCurrency(freeIncome)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', borderBottom: '1px solid var(--border-color)' }}>
-                  <span>Logged Expense Deductions:</span>
-                  <span style={{ fontWeight: 600, color: 'var(--accent-red)' }}>- {formatCurrency(freeDed)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', borderBottom: '1px solid var(--border-color)' }}>
-                  <span>Form 8829 Home Office Space Deduction:</span>
-                  <span style={{ fontWeight: 600, color: 'var(--accent-red)' }}>- {formatCurrency(hoDed)}</span>
-                </div>
-             </div>
-
-             {/* Delivery Driver */}
-             <div>
-                <h4 style={{ fontWeight: 600, fontSize: '1.1rem', marginBottom: '1rem' }}>Delivery App Gig Economy (Uber, DoorDash)</h4>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', borderBottom: '1px solid var(--border-color)' }}>
-                  <span>Gross Receipts/Sales:</span>
-                  <span style={{ fontWeight: 600 }}>{formatCurrency(shipIncome)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', borderBottom: '1px solid var(--border-color)' }}>
-                  <span>IRS Standard Mileage Deduction:</span>
-                  <span style={{ fontWeight: 600, color: 'var(--accent-red)' }}>- {formatCurrency(shipMile)}</span>
-                </div>
-             </div>
-
-           </div>
-        </div>
-
-        {/* Section: Student Optimization */}
-        <div style={{ marginBottom: '3rem', pageBreakInside: 'avoid' }}>
-           <h3 style={{ fontSize: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '1.5rem' }}>
-             Part II: Student Loophole Tax Shield Parameters
-           </h3>
-           
-           <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.5rem' }}>
-             
-             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', borderBottom: '1px solid var(--border-color)' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <strong>Form 1098-T</strong> Calculated Taxable Scholarship Overflow:
-                </span>
-                <span style={{ fontWeight: 600 }}>{formatCurrency(scholarTax)}</span>
-             </div>
-
-             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', borderBottom: '1px solid var(--border-color)' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <strong>AOC/LLC</strong> Legal Textbook Expense Deductions:
-                </span>
-                <span style={{ fontWeight: 600, color: 'var(--accent-red)' }}>- {formatCurrency(scholarText)}</span>
-             </div>
-
-             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <strong>Form 1098-E</strong> Student Loan Interest Deduction (Max $2,500):
-                </span>
-                <span style={{ fontWeight: 600, color: 'var(--accent-red)' }}>- {formatCurrency(scholarLoan)}</span>
-             </div>
-
-           </div>
-
-           <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', alignItems: 'flex-start' }}>
-              <AlertCircle size={20} color="var(--text-muted)" style={{ flexShrink: 0, marginTop: '2px' }} />
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                <i>Note to CPA: The Multi-Hustle Engine has automatically filtered Bank Direct Deposits originating from University/Bursar addresses out of Standard Gross Income to prevent recursive double-taxation alongside the explicit Form 1098-T Taxable Scholarship rendering above. Form 8829 calculations apply exclusively to Schedule C Gig revenue streams.</i>
+      <Busy busy={loading} className="flex flex-col gap-6 md:gap-8">
+        <div id="cpa-document" className="flex flex-col gap-6 md:gap-8">
+          {/* Document Header */}
+          <div className="flex flex-col justify-between gap-4 border-b-2 border-border pb-6 sm:flex-row sm:items-end">
+            <div>
+              <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">TAX ORGANIZER</h1>
+              <p className="mt-1 text-base text-fg-muted md:text-lg">
+                Tax Year {shownYear} Independent Contractor &amp; Higher Education Summary
               </p>
-           </div>
+            </div>
+            <div className="flex flex-col gap-1 text-sm text-fg-muted sm:text-right">
+              <div className="flex items-center gap-2 sm:justify-end">
+                <TrendingUp size={18} className="text-accent" aria-hidden />
+                <span className="font-semibold text-fg">Multi-Hustle OS Verified</span>
+              </div>
+              <div className="flex items-center gap-1.5 sm:justify-end">
+                <CheckCircle2 size={15} className="text-info" aria-hidden />
+                <span>Plaid-verified ledger integrity</span>
+              </div>
+              <div className="flex items-center gap-1.5 sm:justify-end text-fg-faint">
+                <Calendar size={14} aria-hidden />
+                <span>Generated {new Date().toLocaleDateString('en-US', { dateStyle: 'medium' })}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Key KPI Summary Row */}
+          <section aria-label="Key tax figures" className="grid gap-4 sm:grid-cols-3 md:gap-6">
+            <StatCard
+              label="Total Gross Income"
+              value={formatCurrency(grossProp)}
+              caption="Form 1040 line 9 aggregate"
+              accent="neutral"
+            />
+            <StatCard
+              label="Estimated Federal Tax"
+              value={formatCurrency(taxProp)}
+              caption="Form 1040 line 24, before credits"
+              accent="danger"
+              tone="danger"
+            />
+            <StatCard
+              label="Safe-To-Spend Net"
+              value={formatCurrency(netProp)}
+              caption="Cash deposits less expenses and tax"
+              accent="accent"
+              tone="accent"
+            />
+          </section>
+
+          {/* Mandatory EstimateNotice */}
+          <EstimateNotice
+            disclaimer={summaryData?.disclaimer}
+            warnings={summaryData?.warnings}
+            assumptions={summaryData?.assumptions}
+          />
+
+          {/* Part I: Schedule C */}
+          <Card padding="lg" className="break-inside-avoid">
+            <CardHeader className="border-b border-border pb-3">
+              <div>
+                <CardTitle>Part I: Schedule C Profit or Loss Summary</CardTitle>
+                <p className="text-sm text-fg-muted">Sole proprietorship business receipts and ordinary business deductions.</p>
+              </div>
+            </CardHeader>
+
+            <div className="grid gap-6 md:grid-cols-2 md:gap-8">
+              {/* Freelance Column */}
+              <div className="flex flex-col gap-3">
+                <h3 className="text-base font-semibold">Freelance &amp; Professional Services</h3>
+                <DataRow label="Gross Receipts / Sales" hint="Schedule C line 1" value={formatCurrency(freeIncome)} />
+                <DataRow
+                  label="Deductible Operating Expenses"
+                  hint="Schedule C Part II"
+                  value={`-${formatCurrency(freeDed)}`}
+                  tone="muted"
+                />
+                <DataRow
+                  label="Home Office Deduction (Form 8829)"
+                  hint="Schedule C line 30"
+                  value={`-${formatCurrency(hoDed)}`}
+                  tone="muted"
+                />
+              </div>
+
+              {/* Delivery Column */}
+              <div className="flex flex-col gap-3">
+                <h3 className="text-base font-semibold">Delivery &amp; Logistics App Gigs</h3>
+                <DataRow label="Gross Receipts / Sales" hint="Schedule C line 1" value={formatCurrency(deliveryIncome)} />
+                <DataRow
+                  label="Standard Mileage Deduction"
+                  hint={`Schedule C line 9 (${formatMiles(deliveryMiles)} logged)`}
+                  value={`-${formatCurrency(deliveryDeduction)}`}
+                  tone="muted"
+                />
+              </div>
+            </div>
+          </Card>
+
+          {/* Part II: Education */}
+          <Card padding="lg" className="break-inside-avoid">
+            <CardHeader className="border-b border-border pb-3">
+              <div>
+                <CardTitle>Part II: Education Deductions &amp; Scholarships</CardTitle>
+                <p className="text-sm text-fg-muted">Form 1098-T scholarship reconciliation and Form 1098-E student loan interest.</p>
+              </div>
+            </CardHeader>
+
+            <div className="flex flex-col gap-3">
+              <DataRow
+                label="Taxable Scholarship Overflow (Form 1098-T)"
+                hint="Reported on Schedule 1 line 8r; not subject to self-employment tax"
+                value={formatCurrency(scholarTax)}
+              />
+              {scholarText !== undefined && scholarText > 0 && (
+                <DataRow
+                  label="Required Course Materials Offsetting Aid"
+                  hint="IRC §117(b)(2) qualified education expenses"
+                  value={`-${formatCurrency(scholarText)}`}
+                  tone="muted"
+                />
+              )}
+              <DataRow
+                label="Student Loan Interest Deduction (Form 1098-E)"
+                hint="Schedule 1 line 21 above-the-line adjustment (statutory max $2,500)"
+                value={`-${formatCurrency(scholarLoan)}`}
+                tone="accent"
+              />
+            </div>
+
+            <p className="mt-4 border-t border-border pt-3 text-xs leading-relaxed text-fg-faint">
+              Note for tax preparer: Direct deposit refunds originating from institutional bursar accounts are excluded from
+              gross receipts to prevent recursive double-counting alongside Form 1098-T Box 5 scholarship reporting. Form 8829
+              home office expenses are apportioned strictly against Schedule C business revenue.
+            </p>
+          </Card>
+
+          {/* Document Signatures */}
+          <div className="mt-4 flex flex-col justify-between gap-8 border-t-2 border-border pt-6 break-inside-avoid sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-semibold">Taxpayer Signature:</span>
+              <div className="h-8 w-64 border-b border-fg-muted" />
+              <span className="text-xs text-fg-faint">I certify that the transactions above are accurate.</span>
+            </div>
+            <div className="flex flex-col gap-2 sm:items-end">
+              <span className="text-sm font-semibold">Preparer / CPA Review:</span>
+              <div className="h-8 w-64 border-b border-fg-muted" />
+              <span className="text-xs text-fg-faint">Verified against source bank and tax documents.</span>
+            </div>
+          </div>
         </div>
-
-        </div>
-
-        {/* Footer Signature */}
-        <div style={{ borderTop: '2px solid var(--border-color)', paddingTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', pageBreakInside: 'avoid' }}>
-           <div>
-             <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Prepared For Context Initialization By:</div>
-             <div style={{ width: '250px', borderBottom: '1px solid var(--text-primary)', height: '30px' }}></div>
-             <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.3rem' }}>Taxpayer Signature</div>
-           </div>
-           
-           <div>
-             <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Accountant Review:</div>
-             <div style={{ width: '250px', borderBottom: '1px solid var(--text-primary)', height: '30px' }}></div>
-             <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.3rem' }}>CPA Validation Checklist</div>
-           </div>
-        </div>
-
-      </div>
-
+      </Busy>
     </div>
   );
 }
