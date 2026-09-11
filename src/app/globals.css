@@ -1,5 +1,14 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
 
+/*
+ * Design tokens.
+ *
+ * The palette below is the dark theme the app has shipped with. These custom
+ * properties stay the single source of truth: Tailwind utilities alias them
+ * through `@theme inline` (so `bg-card` compiles to `var(--bg-card)`), and the
+ * print stylesheet at the bottom overrides them for the CPA export. Add a
+ * colour here and in `@theme` together, or not at all.
+ */
 :root {
   --bg-primary: #000000;
   --bg-secondary: #0f0f0f;
@@ -7,120 +16,141 @@
   --text-primary: #ffffff;
   --text-secondary: #8e8e93;
   --text-muted: #636366;
-  
-  --accent-green: #00c805; /* Robinhood Green */
+
+  --accent-green: #00c805; /* Robinhood green */
   --accent-green-dim: rgba(0, 200, 5, 0.15);
-  
+
   --accent-red: #ff5000;
   --accent-blue: #00c8e6;
-  
+
   --border-color: #333336;
+  --border-strong: #48484a;
   --border-radius: 12px;
-  
-  --font-sans: 'Outfit', sans-serif;
+
   --transition-smooth: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+@theme inline {
+  /* Typography. `--font-outfit` is set on <html> by next/font in layout.tsx. */
+  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+
+  /* Surfaces */
+  --color-bg: var(--bg-primary);
+  --color-surface: var(--bg-secondary);
+  --color-card: var(--bg-card);
+
+  /* Text */
+  --color-fg: var(--text-primary);
+  --color-fg-muted: var(--text-secondary);
+  --color-fg-faint: var(--text-muted);
+
+  /* Accents: one semantic meaning each. */
+  --color-accent: var(--accent-green); /* money in your favour, primary actions, active nav */
+  --color-accent-dim: var(--accent-green-dim);
+  --color-danger: var(--accent-red); /* tax owed, destructive actions, engine notices */
+  --color-info: var(--accent-blue); /* Plaid, disclaimers, informational */
+
+  /* Lines */
+  --color-border: var(--border-color);
+  --color-border-strong: var(--border-strong);
+
+  --radius-card: var(--border-radius);
+
+  --animate-slide-up: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-slide-in: slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slide-in {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
 }
 
-body {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+/*
+ * Legacy classes.
+ *
+ * Pages not yet converted to the component set (deductions, student, export)
+ * still use these. Each converted page should stop needing them; delete a
+ * rule here once nothing references it. Do not add to this list.
+ */
+@layer components {
+  .card {
+    background-color: var(--bg-card);
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    transition: var(--transition-smooth);
+  }
+
+  .card:hover {
+    transform: translateY(-2px);
+    border-color: var(--border-strong);
+  }
+
+  .text-green {
+    color: var(--accent-green);
+  }
+  .text-red {
+    color: var(--accent-red);
+  }
+  .text-secondary {
+    color: var(--text-secondary);
+  }
+  .flex-item-center {
+    display: flex;
+    align-items: center;
+  }
 }
 
-button {
-  cursor: pointer;
-  border: none;
-  background: none;
-  font-family: inherit;
-  transition: var(--transition-smooth);
-}
-
-h1, h2, h3, h4, h5, h6 {
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-/* Base Layout Classes */
-.app-container {
-  display: flex;
-  min-height: 100vh;
-}
-
-.sidebar {
-  width: 260px;
-  border-right: 1px solid var(--border-color);
-  background-color: var(--bg-primary);
-  display: flex;
-  flex-direction: column;
-}
-
-.main-content {
-  flex: 1;
-  background-color: var(--bg-secondary);
-  display: flex;
-  flex-direction: column;
-}
-
-.header {
-  height: 70px;
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  padding: 0 2rem;
-  background-color: var(--bg-secondary);
-  justify-content: space-between;
-}
-
-.content-area {
-  padding: 2rem;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.card {
-  background-color: var(--bg-card);
-  border-radius: var(--border-radius);
-  padding: 1.5rem;
-  border: 1px solid var(--border-color);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  transition: var(--transition-smooth);
-}
-
-.card:hover {
-  transform: translateY(-2px);
-  border-color: #48484a;
-}
-
-/* Animations */
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-slide-up {
-  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-/* Utilities */
-.text-green { color: var(--accent-green); }
-.text-red { color: var(--accent-red); }
-.text-secondary { color: var(--text-secondary); }
-.flex-item-center { display: flex; align-items: center; }
-
-/* --- CPA EXPORTER PRINT CSS --- */
+/* --- CPA exporter print CSS --- */
 @media print {
   :root {
     --bg-primary: white !important;
@@ -138,20 +168,14 @@ h1, h2, h3, h4, h5, h6 {
     background-color: white !important;
     color: black !important;
   }
-  .app-container {
-    display: block !important;
-    background-color: white !important;
-  }
-  .sidebar, header, .print-hide {
+  /* App chrome is also marked `print:hidden` in AppShell; this covers the pages' own controls. */
+  .print-hide,
+  [data-print-hide] {
     display: none !important;
   }
-  .main-content {
-    background-color: white !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-  .content-area {
+  main {
     padding: 0.5rem !important;
+    overflow: visible !important;
   }
   .card {
     background-color: white !important;
@@ -164,7 +188,16 @@ h1, h2, h3, h4, h5, h6 {
   .card:hover {
     transform: none !important;
   }
-  h1, h2, h3, h4, h5, h6, p, span, div, strong {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  p,
+  span,
+  div,
+  strong {
     color: black !important;
   }
   * {

@@ -129,8 +129,8 @@ export default function StudentHub() {
           <BookOpen size={28} color="var(--accent-blue)" />
         </div>
         <div>
-          <h1 style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>1098-T Tax Override</h1>
-          <p className="text-secondary" style={{ fontSize: '1.1rem' }}>Bypass the 15.3% Self-Employment Tax penalty on your &quot;Full Ride&quot; scholarship overflow.</p>
+          <h1 style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>Form 1098-T: Scholarships and Tuition</h1>
+          <p className="text-secondary" style={{ fontSize: '1.1rem' }}>Enter your 1098-T. Any scholarship beyond tuition and required course costs is taxable income (Schedule 1 line 8r); it is not self-employment income.</p>
         </div>
       </div>
 
@@ -215,29 +215,29 @@ export default function StudentHub() {
             }}
           >
             {saving ? <Loader2 className="animate-spin" /> : <Save size={18} />}
-            Synchronize into Tax Engine
+            Save Form 1098-T
           </button>
         </div>
 
         {/* Verification Engine */}
         <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '2rem' }}>
           <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            SE Tax Shield Verification
+            What the engine reports
           </h2>
-          
+
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-              <span className="text-secondary">Raw Taxable Overflow (Box 5 - Box 1)</span>
+              <span className="text-secondary">Box 5 minus Box 1</span>
               <strong>{formatCurrency(taxableGross)}</strong>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem', background: 'rgba(0, 200, 230, 0.05)', borderRadius: '8px', border: '1px dashed var(--accent-blue)' }}>
-              <span style={{ color: 'var(--accent-blue)' }}>&quot;Textbook Loophole&quot; Auto-Detected (§117)</span>
+              <span style={{ color: 'var(--accent-blue)' }}>Required course materials you categorised (IRC §117(b)(2))</span>
               <strong style={{ color: 'var(--accent-blue)' }}>-{formatCurrency(textbookSavings)}</strong>
             </div>
-            
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
-              <span className="text-secondary">Schedule 1 Line 8r Taxable Scholarship</span>
+              <span className="text-secondary">Taxable scholarship (Schedule 1 line 8r)</span>
               <div style={{ fontSize: '1.3rem', fontWeight: 700 }}>
                 {formatCurrency(ultimateTaxableScholarship)}
               </div>
@@ -248,9 +248,9 @@ export default function StudentHub() {
             <div className="animate-slide-up" style={{ marginTop: '2rem', padding: '1rem', background: 'rgba(0, 200, 5, 0.05)', border: '1px solid var(--accent-green)', borderRadius: '8px', display: 'flex', gap: '0.5rem', color: 'var(--accent-green)' }}>
               <TrendingDown size={28} style={{ flexShrink: 0 }} />
               <div>
-                <strong style={{ fontSize: '1.1rem', marginBottom: '0.2rem', display: 'block' }}>Schedule 1 Line 8r Exemption Active</strong>
+                <strong style={{ fontSize: '1.1rem', marginBottom: '0.2rem', display: 'block' }}>Reported on Schedule 1 line 8r</strong>
                 <p style={{ fontSize: '0.9rem', lineHeight: 1.4 }}>
-                  Generic gig-worker apps misclassify University disbursements as self-employment income. By isolating this as academic overflow under Schedule 1 line 8r, the engine ensures 0% Self-Employment Tax applies!
+                  A taxable scholarship is ordinary income, not earnings from self-employment, so the estimate applies income tax to it and no self-employment tax. Categorise any school-refund deposits as scholarship refunds on the Deductions page so the same dollars are not also counted as business income.
                 </p>
               </div>
             </div>
@@ -265,8 +265,8 @@ export default function StudentHub() {
           <BookOpen size={28} color="var(--accent-green)" />
         </div>
         <div>
-          <h1 style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>1098-E Loan Interest</h1>
-          <p className="text-secondary" style={{ fontSize: '1.1rem' }}>Trigger an &apos;Above-the-Line&apos; tax deduction against your Gross Income (IRC §221, capped at $2,500).</p>
+          <h1 style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>Form 1098-E: Student Loan Interest</h1>
+          <p className="text-secondary" style={{ fontSize: '1.1rem' }}>Interest you paid is deducted from income on Schedule 1 line 21, up to $2,500 and reduced at higher incomes (IRC §221).</p>
         </div>
       </div>
 
@@ -312,14 +312,14 @@ export default function StudentHub() {
             }}
           >
             {savingE ? <Loader2 className="animate-spin" /> : <Save size={18} />}
-            Activate Interest Deduction
+            Save Form 1098-E
           </button>
         </div>
 
         {/* 1098-E Verification Engine */}
         <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: '2rem' }}>
           <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            Above-the-Line Verification
+            What the engine reports
           </h2>
           
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -329,12 +329,12 @@ export default function StudentHub() {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem', background: 'rgba(0, 200, 5, 0.05)', borderRadius: '8px', border: '1px dashed var(--accent-green)' }}>
-              <span style={{ color: 'var(--accent-green)' }}>IRS Cap Enforced (Max $2,500)</span>
+              <span style={{ color: 'var(--accent-green)' }}>After the $2,500 cap and income phaseout</span>
               <strong style={{ color: 'var(--accent-green)' }}>-{formatCurrency(loanInterestDeducted)}</strong>
             </div>
-            
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
-              <span className="text-secondary">Schedule 1 Line 21 AGI Adjustment</span>
+              <span className="text-secondary">Deduction on Schedule 1 line 21</span>
               <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent-green)' }}>
                 -{formatCurrency(loanInterestDeducted)}
               </div>
@@ -349,9 +349,9 @@ export default function StudentHub() {
           <AlertCircle size={24} color="var(--text-secondary)" />
         </div>
         <div>
-          <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>How the &quot;Taxable Overflow&quot; works</h3>
+          <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>How taxable scholarships work</h3>
           <p className="text-secondary" style={{ lineHeight: 1.6, maxWidth: '90%' }}>
-            If your scholarships (Box 5) exceed your tuition (Box 1), you are considered to have a &quot;Full Ride&quot; payout. The IRS requires you to report the excess overflow as standard taxable income since you use it to pay for generic living expenses (rent, food). However, you DO NOT owe the brutal 15.3% Self-Employment (SE) Tax on it like you do for your freelance gig-work (Uber, DoorDash). This dashboard mathematically segregates your income streams to ensure you aren&apos;t severely overcharged by the IRS.
+            A scholarship is tax free only to the extent it pays tuition, fees, and books, supplies and equipment required for your courses (IRC §117; Pub. 970 chapter 1). The part that covers room, board or other living costs is taxable, and so is any amount the grant earmarks for those costs. The estimate reports that part on Schedule 1 line 8r as ordinary income. It is not earnings from self-employment, so no self-employment tax applies to it, and it does count as earned income when working out a dependent&apos;s standard deduction. Amounts on this page come from the tax engine, which cites each rule it applies.
           </p>
         </div>
       </div>

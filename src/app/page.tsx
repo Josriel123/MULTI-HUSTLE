@@ -1,366 +1,239 @@
-"use client"
+'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from 'recharts';
-import {
-  BrainCircuit,
-  TrendingUp,
-  AlertCircle,
-  ArrowRight,
-  Zap,
-  CheckCircle2,
-  AlertTriangle,
-  Info,
-  X,
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { AlertCircle, ArrowRight, BrainCircuit, Car, CheckCircle2, Layers, X, Zap, type LucideIcon } from 'lucide-react';
 import PlaidLinkButton from '@/components/PlaidLinkButton';
+import { EstimateNotice } from '@/components/EstimateNotice';
+import { TaxYearSelect } from '@/components/TaxYearSelect';
+import { fetchChart, fetchSummary, type ChartPoint, type SummaryResponse } from '@/components/api';
+import { filingStatusLabel, formatCurrency, formatMiles } from '@/components/format';
+import { Button, LinkButton } from '@/components/ui/Button';
+import { Busy } from '@/components/ui/Busy';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { InlineStatus } from '@/components/ui/InlineStatus';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { StatCard } from '@/components/ui/StatCard';
 
-interface ChartPoint {
-  month: string;
-  gross: number;
-  net: number;
-}
-
-interface TaxWarning {
-  code: string;
-  message: string;
-  amount?: string;
-}
-
-interface DashboardSummary {
-  gross: number;
-  net: number;
-  taxLiability: number;
-}
-
-interface DashboardSources {
-  freelance: { income: number; deductions: number; homeOfficeDeduction?: number };
-  delivery: { income: number; mileage: number; mileageDeduction?: number };
-}
-
+/**
+ * Dashboard. Reference implementation for the component set: every number on
+ * this page is read from the summary response and formatted; nothing is
+ * computed here. The disclaimer and warnings render directly under the
+ * figures they qualify (EstimateNotice), on every load, for every year.
+ */
 export default function Dashboard() {
-  const router = useRouter();
+  // `undefined` means "let the server pick the current year"; the response tells us which it chose.
+  const [taxYear, setTaxYear] = useState<number | undefined>(undefined);
+  const [data, setData] = useState<SummaryResponse | null>(null);
+  const [chart, setChart] = useState<ChartPoint[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(true);
-
-  // Dynamic State
-  const [chartData, setChartData] = useState<ChartPoint[]>([]);
-  const [summary, setSummary] = useState<DashboardSummary>({ gross: 0, net: 0, taxLiability: 0 });
-  const [sources, setSources] = useState<DashboardSources>({
-    freelance: { income: 0, deductions: 0 },
-    delivery: { income: 0, mileage: 0 },
-  });
-  const [disclaimer, setDisclaimer] = useState<string>('');
-  const [warnings, setWarnings] = useState<TaxWarning[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Loading is derived, not set: the page is busy until the response for the
+  // currently requested year has landed (or failed).
+  const [resolvedKey, setResolvedKey] = useState<string | null>(null);
+  const requestKey = taxYear === undefined ? 'default' : String(taxYear);
+  const loading = resolvedKey !== requestKey;
 
   useEffect(() => {
     let ignore = false;
-    async function loadData() {
-      try {
-        const [summaryRes, chartRes] = await Promise.all([
-          fetch('/api/dashboard/summary'),
-          fetch('/api/dashboard/chart'),
-        ]);
-
-        const summaryData = await summaryRes.json();
-        const chartDataObj = await chartRes.json();
-
-        if (!ignore) {
-          if (summaryData.summary) {
-            setSummary(summaryData.summary);
-            setSources(summaryData.sources);
-          }
-          if (summaryData.disclaimer) {
-            setDisclaimer(summaryData.disclaimer);
-          }
-          if (Array.isArray(summaryData.warnings)) {
-            setWarnings(summaryData.warnings);
-          }
-          if (Array.isArray(chartDataObj)) {
-            setChartData(chartDataObj);
-          }
-        }
-      } catch (err) {
+    Promise.all([fetchSummary(taxYear), fetchChart(taxYear)])
+      .then(([summary, points]) => {
+        if (ignore) return;
+        setData(summary);
+        setChart(points);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (ignore) return;
         console.error('Failed to load dashboard data', err);
-      } finally {
-        if (!ignore) {
-          setLoading(false);
-        }
-      }
-    }
-    loadData();
+        setError(err instanceof Error ? err.message : 'Failed to load dashboard data.');
+      })
+      .finally(() => {
+        if (!ignore) setResolvedKey(requestKey);
+      });
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [taxYear, requestKey]);
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(val);
-  };
+  const shownYear = data?.taxYear ?? taxYear;
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '2rem',
-        filter: loading ? 'blur(4px)' : 'none',
-        transition: 'filter 0.3s',
-      }}
-    >
-      {/* Page Header */}
-      <div>
-        <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Overview</h1>
-        <p className="text-secondary" style={{ fontSize: '1.1rem' }}>
-          Welcome back. Deep insights loaded from your database.
-        </p>
-      </div>
+    <div className="flex flex-col gap-6 md:gap-8">
+      <PageHeader
+        title="Overview"
+        description={
+          data
+            ? `Federal estimate for tax year ${data.taxYear}, filing as ${filingStatusLabel(data.filingStatus).toLowerCase()}.`
+            : 'Federal tax estimate from your transactions and forms.'
+        }
+        actions={<TaxYearSelect value={shownYear} onChange={setTaxYear} />}
+      />
 
-      {/* Onboarding & Education Widget */}
+      {error && <InlineStatus kind="error">{error}</InlineStatus>}
+
       {onboardingOpen && (
-        <div
-          className="card animate-slide-up"
-          style={{
-            display: 'flex',
-            border: '1px solid var(--accent-blue)',
-            background: 'rgba(0, 200, 230, 0.05)',
-            position: 'relative',
-            overflow: 'hidden',
-          }}
-        >
-          <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', background: 'var(--accent-blue)' }}></div>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-              <BrainCircuit color="var(--accent-blue)" size={24} />
-              <h2 style={{ fontSize: '1.3rem' }}>Setup Automations</h2>
-            </div>
-            <p className="text-secondary" style={{ marginBottom: '1.5rem', lineHeight: 1.5, maxWidth: '80%' }}>
-              Connect your gig and bank accounts to unlock <strong>Tax-Loss Harvesting</strong> and <strong>Automated Mileage</strong> tracking. We automatically detect your expenses to lower your taxable burden so you can keep more of what you earn.
-            </p>
-            <PlaidLinkButton />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', paddingRight: '2rem' }}>
-            <div style={{ background: 'var(--bg-primary)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <CheckCircle2 size={16} color="var(--accent-green)" />
-                <span style={{ fontSize: '0.9rem' }}>Database Connected</span>
+        <Card className="relative overflow-hidden border-info bg-info/5 animate-slide-up">
+          <div className="absolute inset-y-0 left-0 w-1 bg-info" aria-hidden />
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
+            <div className="min-w-0 flex-1">
+              <div className="mb-3 flex items-center gap-3">
+                <BrainCircuit size={24} className="text-info" aria-hidden />
+                <h2 className="text-xl font-semibold">Connect your accounts</h2>
               </div>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                <AlertCircle size={16} color="var(--accent-red)" />
-                <span style={{ fontSize: '0.9rem' }}>Plaid Sandbox Ready</span>
+              <p className="mb-5 max-w-prose leading-relaxed text-fg-muted">
+                Link a bank in the Plaid sandbox to import transactions, then categorise them on the Deductions page. The
+                estimate updates from what you enter; it never guesses from a description.
+              </p>
+              <PlaidLinkButton />
+            </div>
+            <div className="shrink-0 rounded-card border border-border bg-bg p-5 text-sm">
+              <div className="mb-2 flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-accent" aria-hidden />
+                <span>Database connected</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <AlertCircle size={16} className="text-danger" aria-hidden />
+                <span>Plaid in sandbox mode</span>
               </div>
             </div>
           </div>
-          <button
-            onClick={() => setOnboardingOpen(false)}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="absolute right-3 top-3 px-2"
             aria-label="Dismiss setup card"
-            style={{
-              position: 'absolute',
-              top: '1rem',
-              right: '1rem',
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--text-muted)',
-              cursor: 'pointer',
-            }}
+            onClick={() => setOnboardingOpen(false)}
           >
-            <X size={18} />
-          </button>
-        </div>
+            <X size={18} aria-hidden />
+          </Button>
+        </Card>
       )}
 
-      {/* Gamified Stat Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }} className="animate-slide-up">
-        {/* True Net Card */}
-        <div className="card" style={{ borderTop: '4px solid var(--accent-green)' }}>
-          <h3 className="text-secondary" style={{ fontSize: '0.9rem', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            True Net Income
-          </h3>
-          <div style={{ fontSize: '2.5rem', fontWeight: 700, marginBottom: '0.5rem', display: 'flex', alignItems: 'flex-end', gap: '1rem' }}>
-            {formatCurrency(summary.net)}
-            <span style={{ fontSize: '1rem', color: 'var(--accent-green)', display: 'flex', alignItems: 'center', paddingBottom: '0.5rem' }}>
-              <TrendingUp size={16} style={{ marginRight: '0.25rem' }} /> Real Curve
-            </span>
+      <Busy busy={loading} className="flex flex-col gap-6 md:gap-8">
+        {/* Headline figures. The notice below is part of this block on purpose. */}
+        <section aria-label="Estimate summary" className="flex flex-col gap-4 md:gap-6 animate-slide-up">
+          <div className="grid gap-4 md:grid-cols-3 md:gap-6">
+            <StatCard
+              label="Safe to spend"
+              value={formatCurrency(data?.summary.net)}
+              caption="Deposits counted as income, less every expense and the estimated federal tax"
+              accent="accent"
+            />
+            <StatCard label="Total income" value={formatCurrency(data?.summary.gross)} caption="Form 1040 line 9" accent="neutral" />
+            <StatCard
+              label="Estimated federal tax"
+              value={formatCurrency(data?.summary.taxLiability)}
+              caption="Form 1040 line 24, before credits. An estimate that runs high, not an amount owed."
+              accent="danger"
+              tone="danger"
+            />
           </div>
-          <p className="text-secondary" style={{ fontSize: '0.85rem' }}>
-            &quot;Safe-to-Spend&quot; after deposits, all expenses &amp; est. taxes
-          </p>
-        </div>
+          <EstimateNotice disclaimer={data?.disclaimer} warnings={data?.warnings} assumptions={data?.assumptions} />
+        </section>
 
-        {/* Gross Income Card */}
-        <div className="card" style={{ borderTop: '4px solid var(--border-color)' }}>
-          <h3 className="text-secondary" style={{ fontSize: '0.9rem', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Gross Income
-          </h3>
-          <div style={{ fontSize: '2.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>{formatCurrency(summary.gross)}</div>
-          <p className="text-secondary" style={{ fontSize: '0.85rem' }}>Form 1040 line 9 total income</p>
-        </div>
-
-        {/* Est. Tax Liability Card - Strictly NOT labeled as an amount owed */}
-        <div className="card" style={{ borderTop: '4px solid var(--accent-red)', background: 'linear-gradient(180deg, var(--bg-card) 0%, rgba(255, 80, 0, 0.05) 100%)' }}>
-          <h3 className="text-secondary" style={{ fontSize: '0.9rem', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Est. Federal Tax Liability
-          </h3>
-          <div style={{ fontSize: '2.5rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--accent-red)' }}>
-            {formatCurrency(summary.taxLiability)}
-          </div>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-            Estimate before credits (Form 1040 line 24). Does not reflect tax credits; not an amount owed.
-          </div>
-        </div>
-      </div>
-
-      {/* Mandatory Statutory Disclaimer & Engine Warnings */}
-      {(disclaimer || warnings.length > 0) && (
-        <div
-          className="card animate-slide-up"
-          style={{
-            padding: '1.25rem 1.5rem',
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '10px',
-          }}
-        >
-          {disclaimer && (
-            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', marginBottom: warnings.length > 0 ? '1rem' : 0 }}>
-              <Info size={18} color="var(--accent-blue)" style={{ flexShrink: 0, marginTop: '2px' }} />
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                <strong style={{ color: 'var(--text-primary)' }}>Tax Engine Disclaimer: </strong>
-                {disclaimer}
-              </div>
+        <Card className="animate-slide-up">
+          <CardHeader>
+            <div>
+              <CardTitle>Income and net through the year</CardTitle>
+              <CardDescription>Cumulative by month: total income, and what is left after expenses and the estimated tax.</CardDescription>
             </div>
+          </CardHeader>
+          <div className="h-[260px] w-full md:h-[350px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chart} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--accent-green)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="var(--accent-green)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="colorGross" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--border-color)" stopOpacity={0.5} />
+                    <stop offset="95%" stopColor="var(--border-color)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+                <XAxis dataKey="month" stroke="var(--text-secondary)" tickLine={false} axisLine={false} />
+                <YAxis stroke="var(--text-secondary)" tickLine={false} axisLine={false} width={64} tickFormatter={(v: number) => formatCurrency(v)} />
+                <Tooltip
+                  formatter={(v) => formatCurrency(typeof v === 'number' || typeof v === 'string' ? v : null)}
+                  contentStyle={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', borderRadius: '8px' }}
+                  itemStyle={{ color: 'var(--text-primary)' }}
+                />
+                <Area type="monotone" dataKey="gross" name="Total income" stroke="var(--text-secondary)" strokeWidth={2} fill="url(#colorGross)" />
+                <Area type="monotone" dataKey="net" name="Net" stroke="var(--accent-green)" strokeWidth={3} fill="url(#colorNet)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <section aria-label="Income by source" className="grid gap-4 md:grid-cols-2 md:gap-6 animate-slide-up">
+          <SourceCard
+            title="Freelance income"
+            icon={Zap}
+            amount={formatCurrency(data?.sources.freelance.income)}
+            details={[
+              ['Deductible expenses', formatCurrency(data?.sources.freelance.deductions)],
+              ['Home office deduction', formatCurrency(data?.sources.freelance.homeOfficeDeduction)],
+            ]}
+            action={{ href: '/deductions', label: 'Log an expense' }}
+          />
+          <SourceCard
+            title="Delivery income"
+            icon={Car}
+            amount={formatCurrency(data?.sources.delivery.income)}
+            details={[
+              ['Miles logged', formatMiles(data?.sources.delivery.mileage)],
+              ['Standard mileage deduction', formatCurrency(data?.sources.delivery.mileageDeduction)],
+            ]}
+            action={{ href: '/deductions', label: 'Log mileage' }}
+          />
+          {data && data.sources.other.income > 0 && (
+            <SourceCard
+              title="Other income"
+              icon={Layers}
+              amount={formatCurrency(data.sources.other.income)}
+              details={[['Deductible expenses', formatCurrency(data.sources.other.deductions)]]}
+              action={{ href: '/deductions', label: 'Review transactions' }}
+            />
           )}
-
-          {warnings.length > 0 && (
-            <div style={{ borderTop: disclaimer ? '1px solid var(--border-color)' : 'none', paddingTop: disclaimer ? '0.75rem' : 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-red)' }}>
-                <AlertTriangle size={16} /> Tax Model Notices ({warnings.length})
-              </div>
-              <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                {warnings.map((w, idx) => (
-                  <li key={idx}>
-                    {w.message}
-                    {w.amount ? ` (Affects ~$${w.amount})` : ''}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Main Chart Section */}
-      <div className="card animate-slide-up" style={{ animationDelay: '0.1s' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-          <div>
-            <h3 style={{ fontSize: '1.2rem', marginBottom: '0.25rem' }}>Income vs Net Progression (12-Month Cumulative)</h3>
-            <p className="text-secondary" style={{ fontSize: '0.9rem' }}>
-              Real Form 1040 &amp; Schedule C net curve derived across all transactions.
-            </p>
-          </div>
-        </div>
-
-        <div style={{ width: '100%', height: 350 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="var(--accent-green)" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="var(--accent-green)" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="colorGross" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="var(--border-color)" stopOpacity={0.5} />
-                  <stop offset="95%" stopColor="var(--border-color)" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
-              <XAxis dataKey="month" stroke="var(--text-secondary)" tickLine={false} axisLine={false} />
-              <YAxis stroke="var(--text-secondary)" tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
-              <Tooltip
-                contentStyle={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-color)', borderRadius: '8px' }}
-                itemStyle={{ color: 'var(--text-primary)' }}
-              />
-              <Area type="monotone" dataKey="gross" stroke="var(--text-secondary)" strokeWidth={2} fillOpacity={1} fill="url(#colorGross)" />
-              <Area type="monotone" dataKey="net" stroke="var(--accent-green)" strokeWidth={3} fillOpacity={1} fill="url(#colorNet)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Source Breakdown */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', animationDelay: '0.2s' }} className="animate-slide-up">
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h3 style={{ fontSize: '1.1rem' }}>Freelance Dev Income</h3>
-            <Zap size={20} color="var(--accent-green)" />
-          </div>
-          <div style={{ fontSize: '2rem', fontWeight: 600, marginBottom: '0.5rem' }}>{formatCurrency(sources.freelance.income)}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-            <span>Hardware written off: <strong style={{ color: 'var(--text-primary)' }}>{formatCurrency(sources.freelance.deductions)}</strong></span>
-          </div>
-          <button
-            onClick={() => router.push('/deductions')}
-            style={{
-              width: '100%',
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-color)',
-              padding: '0.75rem',
-              borderRadius: '8px',
-              color: 'var(--text-primary)',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              gap: '0.5rem',
-              cursor: 'pointer',
-            }}
-          >
-            Log New Hardware <ArrowRight size={16} />
-          </button>
-        </div>
-
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h3 style={{ fontSize: '1.1rem' }}>Delivery Gig Income</h3>
-            <Zap size={20} color="var(--accent-green)" />
-          </div>
-          <div style={{ fontSize: '2rem', fontWeight: 600, marginBottom: '0.5rem' }}>{formatCurrency(sources.delivery.income)}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-            <span>Automated Mileage logged: <strong style={{ color: 'var(--text-primary)' }}>{sources.delivery.mileage} mi</strong></span>
-          </div>
-          <button
-            onClick={() => router.push('/deductions')}
-            style={{
-              width: '100%',
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-color)',
-              padding: '0.75rem',
-              borderRadius: '8px',
-              color: 'var(--text-primary)',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              gap: '0.5rem',
-              cursor: 'pointer',
-            }}
-          >
-            Manual Route Entry <ArrowRight size={16} />
-          </button>
-        </div>
-      </div>
+        </section>
+      </Busy>
     </div>
+  );
+}
+
+function SourceCard({
+  title,
+  icon: Icon,
+  amount,
+  details,
+  action,
+}: {
+  title: string;
+  icon: LucideIcon;
+  amount: string;
+  details: Array<[label: string, value: string]>;
+  action: { href: string; label: string };
+}) {
+  return (
+    <Card hover className="flex flex-col">
+      <CardHeader className="mb-4 items-center">
+        <CardTitle as="h3">{title}</CardTitle>
+        <Icon size={20} className="text-accent" aria-hidden />
+      </CardHeader>
+      <div className="mb-3 text-3xl font-semibold tabular-nums">{amount}</div>
+      <dl className="mb-5 flex flex-col gap-1 text-sm text-fg-muted">
+        {details.map(([label, value]) => (
+          <div key={label} className="flex justify-between gap-4">
+            <dt>{label}</dt>
+            <dd className="font-semibold tabular-nums text-fg">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <LinkButton href={action.href} variant="secondary" fullWidth className="mt-auto" trailingIcon={<ArrowRight size={16} aria-hidden />}>
+        {action.label}
+      </LinkButton>
+    </Card>
   );
 }

@@ -1,8 +1,10 @@
-"use client";
+'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
-import { Link as LinkIcon, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Link as LinkIcon, CheckCircle, RefreshCw } from 'lucide-react';
+import { Button } from './ui/Button';
+import { InlineStatus } from './ui/InlineStatus';
 
 export default function PlaidLinkButton() {
   const [token, setToken] = useState<string | null>(null);
@@ -83,10 +85,10 @@ export default function PlaidLinkButton() {
         const parts = [`Synced ${data.count} transaction${data.count === 1 ? '' : 's'}`];
         if (data.removed > 0) parts.push(`${data.removed} removed`);
         setMessage({ text: `${parts.join(', ')}.`, kind: 'ok' });
-        // Refresh server components so the dashboard reflects the new rows.
+        // Refresh so the dashboard reflects the new rows.
         window.location.reload();
       } else if (res.status === 404) {
-        // Server says there's no connection — correct our state rather than
+        // Server says there's no connection: correct our state rather than
         // leaving the user with a button that always fails.
         setLinked(false);
         setMessage({ text: 'No linked bank found. Please connect one.', kind: 'error' });
@@ -101,41 +103,24 @@ export default function PlaidLinkButton() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+    <div className="flex flex-col gap-2">
       {linked ? (
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--bg-secondary)', color: 'var(--accent-green)', border: '1px solid var(--accent-green)', padding: '0.75rem 1.5rem', borderRadius: '8px', fontWeight: 600 }}>
-            <CheckCircle size={18} />
-            Bank Account Connected
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex h-11 items-center gap-2 rounded-lg border border-accent bg-surface px-4 text-sm font-semibold text-accent">
+            <CheckCircle size={18} aria-hidden />
+            Bank account connected
           </div>
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            style={{ padding: '0.75rem 1.5rem', background: 'var(--accent-blue)', color: '#000', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: syncing ? 'wait' : 'pointer', opacity: syncing ? 0.7 : 1 }}
-          >
-            {syncing ? 'Syncing...' : 'Sync Transactions'}
-          </button>
+          <Button variant="info" onClick={handleSync} loading={syncing} icon={<RefreshCw size={16} aria-hidden />}>
+            {syncing ? 'Syncing…' : 'Sync transactions'}
+          </Button>
         </div>
       ) : (
-        <button
-          onClick={() => open()}
-          disabled={!ready || loading}
-          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--accent-blue)', color: '#000', border: 'none', padding: '0.75rem 1.5rem', borderRadius: '8px', fontWeight: 600, cursor: !ready || loading ? 'wait' : 'pointer', opacity: !ready || loading ? 0.7 : 1 }}
-        >
-          {loading ? <Loader2 size={18} className="animate-spin" /> : <LinkIcon size={18} />}
-          Securely Connect Bank
-        </button>
+        <Button variant="info" onClick={() => open()} disabled={!ready} loading={loading} icon={<LinkIcon size={18} aria-hidden />}>
+          Connect a bank (Plaid sandbox)
+        </Button>
       )}
 
-      {message && (
-        <div
-          role="status"
-          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: message.kind === 'ok' ? 'var(--accent-green)' : 'var(--accent-red)' }}
-        >
-          {message.kind === 'ok' ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
-          {message.text}
-        </div>
-      )}
+      {message && <InlineStatus kind={message.kind}>{message.text}</InlineStatus>}
     </div>
   );
 }

@@ -37,7 +37,7 @@ Neon needs **two** connection strings: `DATABASE_URL` (pooled, hostname has `-po
 | 1 — Stop the bleeding | Opus 5 | User bootstrap, Plaid consolidation, idempotent sync, token encryption, auth gating | **Done** |
 | 2 — Tax engine | Fable 5.1 wrote → Astra audited → Fable fixed | `src/lib/tax/`, plus `Float` → `Decimal` migration | **Done** — merged to `master`. Audited independently (11 findings, [triaged](docs/audits/federal-tax-2026-09-09/TRIAGE.md) and fixed); 161 tests, 270/270 boundary probes. Migrations applied to the main Neon DB 2026-09-09. |
 | 3 — Real data | Gemini 3.8 Flash | Real chart aggregation, mileage as logged entry, transaction edit/delete | **Ready** |
-| 4 — Design | Fable 5.1 designs → Gemini converts | Enable Tailwind, component set, kill inline styles, responsive | **Ready** (see the Phase 3/4 note below) |
+| 4 — Design | Fable 5.1 designs → Gemini converts | Enable Tailwind, component set, kill inline styles, responsive | **Design done**: Tailwind on, tokens + component set in `src/components/` (spec in its README), responsive shell, dashboard and home office converted as the reference. Gemini converts deductions, student and export to the same pattern. |
 | 5 — E2E + ship | Astra drives → Opus 5 integrates | Browser-driven verification, PDF export, Vercel | Blocked on all |
 
 ### Note for Phases 3 and 4: the pages don't use the engine yet
@@ -117,8 +117,9 @@ Fixed in Phase 2 (branch `phase-2-tax-engine`, pending audit):
 Still open:
 - **The chart is hardcoded.** `api/dashboard/chart` returns seven literal month objects. It claims $36,000 gross against $47,500 of real data. (Phase 3)
 - **Mileage has no data source yet.** The summary returns `0` (the old `amount * 0.25` is gone); Phase 3 adds logged entries priced by `src/lib/tax/mileage.ts`. (Phase 3)
-- **Tailwind 4 is installed but dead** — `globals.css` never imports it; everything is inline styles. (Phase 4)
-- Two component directories: `src/app/components/` and `src/components/`. (Phase 4)
+- ~~**Tailwind 4 is installed but dead**~~ **Fixed in Phase 4.** `globals.css` imports Tailwind and aliases the existing palette as theme tokens; the dashboard and home office pages have zero inline styles. Deductions, student and export still carry theirs until Gemini converts them (`src/components/README.md` is the spec).
+- ~~Two component directories~~ **Fixed in Phase 4.** `src/components/` only.
+- **Phase 4 follow-ups for the remaining conversions:** `student/page.tsx` still computes `box5 - box1` locally and posts without a tax year; `deductions/page.tsx` and `export/page.tsx` still use the legacy `.card`/`.text-secondary` classes and lose list bullets under Tailwind's reset until converted. The student copy was rewritten in Phase 4 (no more "bypass the 15.3% penalty"); the layout was not.
 - An orphaned demo user (cuid id, 4 transactions) left over from the old seed script — invisible to the app, safe to delete.
 - Stale `dev.db` / `prisma/dev.db` still tracked in git.
 - ~~**Form1098T, Form1098E and HomeOfficeDeduction have no tax year.**~~ **Fixed in Phase 3.5.** All three now carry `taxYear` under `@@unique([userId, taxYear])`, so a 2025 request no longer sees the 2026 statement. Year resolution is shared in `src/lib/taxYear.ts` rather than copied per route, and the fallback past the end of the parameter tables raises `tax_year_fallback` rather than applying the wrong year silently.

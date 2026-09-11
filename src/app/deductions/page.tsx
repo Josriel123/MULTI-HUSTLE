@@ -16,6 +16,7 @@ import {
   X
 } from 'lucide-react';
 import Link from 'next/link';
+import { categoryLabel } from '@/components/format';
 
 interface IncomeSourceItem {
   id?: string;
@@ -654,8 +655,11 @@ export default function DeductionLog() {
                             </span>
                           )}
                           {t.category && (
-                            <span style={{ fontSize: '0.75rem', padding: '0.1rem 0.4rem', background: 'var(--bg-primary)', color: 'var(--text-muted)', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
-                              {t.category}
+                            <span
+                              title={t.category}
+                              style={{ fontSize: '0.75rem', padding: '0.1rem 0.4rem', background: 'var(--bg-primary)', color: 'var(--text-muted)', borderRadius: '4px', border: '1px solid var(--border-color)' }}
+                            >
+                              {categoryLabel(t.category)}
                             </span>
                           )}
                         </div>
