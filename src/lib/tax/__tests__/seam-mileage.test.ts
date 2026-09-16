@@ -147,4 +147,34 @@ describe('the summary and chart routes share one estimate function', () => {
     expectMoney(june.estimate.scheduleC.mileage.deduction, '290.00'); // 400 x 72.5c
     expectMoney(summary.estimate.scheduleC.mileage.deduction, '746.00'); // + 600 x 76c
   });
+
+  // Review findings on the first cut (2026-09-16): line 9 was rounded per
+  // trip, and only the first trip's rate period was cited.
+  it('prices line 9 once per rate period from the summed miles, as Part IV does, not trip by trip', () => {
+    const INCOME: TransactionRow = { amount: '10000', type: 'Income', date: d('2026-02-01'), category: 'business_income', incomeSource: null };
+    // Three 12.5-mile trips at 72.5c: 37.5 x 0.725 = 27.1875 -> 27.19.
+    // Rounding each trip (9.0625 -> 9.06) and adding would give 27.18.
+    const { estimate } = estimateFromRows({
+      taxYear: 2026,
+      transactions: [INCOME],
+      mileageLogs: [{ date: d('2026-03-01'), miles: '12.5' }, { date: d('2026-03-02'), miles: '12.5' }, { date: d('2026-03-03'), miles: '12.5' }],
+    });
+    expectMoney(estimate.scheduleC.mileage.totalMiles, '37.50');
+    expectMoney(estimate.scheduleC.mileage.deduction, '27.19');
+  });
+
+  it('cites every standard mileage rate period actually used', () => {
+    const INCOME: TransactionRow = { amount: '10000', type: 'Income', date: d('2026-02-01'), category: 'business_income', incomeSource: null };
+    const labels = (logs: { date: Date; miles: string }[]) =>
+      estimateFromRows({ taxYear: 2026, transactions: [INCOME], mileageLogs: logs }).estimate.scheduleC.citations.map((c) => c.label).join(' | ');
+
+    const both = labels([{ date: d('2026-03-01'), miles: '10' }, { date: d('2026-08-01'), miles: '10' }]);
+    expect(both).toMatch(/Notice 2026-10/);
+    expect(both).toMatch(/Announcement 2026-11/);
+    expect(both).toMatch(/Rev\. Proc\. 2019-46/);
+
+    const firstHalfOnly = labels([{ date: d('2026-03-01'), miles: '10' }]);
+    expect(firstHalfOnly).toMatch(/Notice 2026-10/);
+    expect(firstHalfOnly).not.toMatch(/Announcement 2026-11/);
+  });
 });

@@ -1,8 +1,8 @@
 import { DE_MINIMIS_SAFE_HARBOR_LIMIT, EXPENSE_CATEGORIES, type ExpenseCategory } from './categories';
 import { computeHomeOffice, type HomeOfficeInput, type HomeOfficeResult } from './homeOffice';
-import { computeStandardMileageDeduction, MILEAGE_CITATIONS } from './mileage';
+import { computeStandardMileageDeduction, MILEAGE_CITATIONS, mileageRateOn } from './mileage';
 import { cents, isAboveZero, isBelowZero, money, nonNegativeMoney, sum, times, ZERO, type Money, type MoneyInput } from './money';
-import type { TaxYearParameters } from './parameters/types';
+import type { MileageRatePeriod, TaxYearParameters } from './parameters/types';
 import type { Citation, Line, Warning } from './types';
 
 /**
@@ -230,14 +230,34 @@ export function computeScheduleC(input: ScheduleCInput, params?: TaxYearParamete
   if (trips.length > 0 && !params) {
     throw new Error('scheduleC: mileage trips were supplied without the tax year parameters needed to price them');
   }
+  // Part IV line 44a is a total of business miles, and line 9 is that total
+  // times the rate, so miles are summed per rate period and each period is
+  // priced once. Pricing (and rounding) trip by trip could differ by cents.
+  // Every period actually used is cited (2026 has two).
+  const milesByPeriod = new Map<string, { period: MileageRatePeriod; miles: Money }>();
+  for (const [index, trip] of trips.entries()) {
+    const period = mileageRateOn(trip.date, params as TaxYearParameters);
+    const miles = nonNegativeMoney(trip.miles, `scheduleC.mileage[${index}].miles`);
+    const key = `${period.from}..${period.to}`;
+    const entry = milesByPeriod.get(key) ?? { period, miles: ZERO };
+    entry.miles = entry.miles.plus(miles);
+    milesByPeriod.set(key, entry);
+  }
   let totalMiles: Money = ZERO;
   let standardMileage: Money = ZERO;
-  for (const [index, trip] of trips.entries()) {
-    const priced = computeStandardMileageDeduction(trip.miles, trip.date, params as TaxYearParameters);
-    if (index === 0) citations.push(priced.period.citation, MILEAGE_CITATIONS.authority, MILEAGE_CITATIONS.substantiation);
-    totalMiles = totalMiles.plus(priced.miles);
+  const mileagePeriodLines: Line[] = [];
+  for (const { period, miles } of milesByPeriod.values()) {
+    const priced = computeStandardMileageDeduction(miles, period.from, params as TaxYearParameters);
+    totalMiles = totalMiles.plus(miles);
     standardMileage = standardMileage.plus(priced.deduction);
+    citations.push(period.citation);
+    mileagePeriodLines.push({
+      ref: period.citation.label,
+      label: `${miles.toFixed(1)} miles at $${priced.ratePerMile.toFixed(3)} (${period.from} to ${period.to})`,
+      value: priced.deduction,
+    });
   }
+  if (milesByPeriod.size > 0) citations.push(MILEAGE_CITATIONS.authority, MILEAGE_CITATIONS.substantiation);
   const actualLine = expenseLines.find((l) => l.category === 'car_and_truck');
   const actualVehicleExpenses = actualLine?.deductible ?? ZERO;
 
@@ -301,6 +321,7 @@ export function computeScheduleC(input: ScheduleCInput, params?: TaxYearParamete
     ...(trips.length > 0
       ? [
           { ref: 'Schedule C Part IV line 44a', label: `Business miles logged (${trips.length} trip${trips.length === 1 ? '' : 's'})`, value: totalMiles },
+          ...mileagePeriodLines,
           { ref: 'Schedule C line 9', label: 'Standard mileage rate deduction', value: mileageDeduction },
         ]
       : []),
