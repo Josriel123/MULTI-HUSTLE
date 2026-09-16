@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { auth } from '@clerk/nextjs/server';
 import { requireUser } from '@/lib/user';
-import { isExpenseCategory, isIncomeCategory } from '@/lib/tax';
+import { isDeductibleExpenseCategory, isExpenseCategory, isIncomeCategory } from '@/lib/tax';
 
 /**
  * Money-over-the-wire contract:
@@ -19,6 +19,14 @@ import { isExpenseCategory, isIncomeCategory } from '@/lib/tax';
  * 3. Format values strictly at the render edge using `Intl.NumberFormat`.
  * 4. Tax liability and deduction arithmetic must always be derived by the audited
  *    tax engine (`src/lib/tax`), never in UI code.
+ *
+ * Tax treatment contract (e2e audit 2026-09-16, F2):
+ * ---------------------------------------------------
+ * `category` is the only thing that decides how a transaction is taxed. The
+ * `taxDeductible` column is DERIVED from it here (an expense in a Schedule C
+ * category) and is never read by the tax engine; a `taxDeductible` value in the
+ * request body is ignored. To record a non-deductible expense, categorise it
+ * `personal`. An expense with no category is treated as personal and flagged.
  */
 
 export async function POST(req: Request) {
@@ -30,7 +38,7 @@ export async function POST(req: Request) {
 
   try {
     const data = await req.json();
-    const { amount, type, description, taxDeductible, sourceName, category, date } = data;
+    const { amount, type, description, sourceName, category, date } = data;
 
     if (amount === undefined || amount === null || String(amount).trim() === '') {
       return NextResponse.json({ error: 'Amount is required' }, { status: 400 });
@@ -41,6 +49,24 @@ export async function POST(req: Request) {
       decimalAmount = new Prisma.Decimal(amount).abs();
     } catch {
       return NextResponse.json({ error: 'Invalid decimal amount' }, { status: 400 });
+    }
+
+    const txType = type === 'Income' ? 'Income' : 'Expense';
+
+    // A category, when given, must be one the engine knows for this side of
+    // the ledger. Storing an unknown string used to be allowed; the engine then
+    // treated the row as uncategorised while the UI showed the string, which is
+    // two different answers to one question.
+    let cleanCategory: string | null = null;
+    if (category !== undefined && category !== null && category !== '') {
+      const valid = txType === 'Income' ? isIncomeCategory(category) : isExpenseCategory(category);
+      if (!valid) {
+        return NextResponse.json(
+          { error: `Category ${JSON.stringify(category)} is not a valid ${txType.toLowerCase()} category.` },
+          { status: 400 }
+        );
+      }
+      cleanCategory = category;
     }
 
     // Find or create the associated income source (e.g. "Freelance Dev Income")
@@ -56,27 +82,16 @@ export async function POST(req: Request) {
       }
     }
 
-    // Validate category if provided
-    let cleanCategory: string | null = null;
-    if (category) {
-      if (type === 'Income' && isIncomeCategory(category)) {
-        cleanCategory = category;
-      } else if (type === 'Expense' && isExpenseCategory(category)) {
-        cleanCategory = category;
-      } else {
-        cleanCategory = String(category);
-      }
-    }
-
     const txDate = date ? new Date(date) : new Date();
 
     const transaction = await prisma.transaction.create({
       data: {
         amount: decimalAmount,
-        type: type === 'Income' ? 'Income' : 'Expense',
+        type: txType,
         date: txDate,
         description: description ? String(description).trim() : '',
-        taxDeductible: Boolean(taxDeductible),
+        // Derived, never taken from the body. See the contract above.
+        taxDeductible: txType === 'Expense' && isDeductibleExpenseCategory(cleanCategory),
         category: cleanCategory,
         userId: userId,
         incomeSourceId: incomeSource ? incomeSource.id : undefined
@@ -116,4 +131,3 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to fetch transactions' }, { status: 500 });
   }
 }
-

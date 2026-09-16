@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { Edit2, Lock, PlusCircle, Trash2, X } from 'lucide-react';
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, isDeductibleExpenseCategory } from '@/lib/tax/categories';
 import {
   createTransaction,
   deleteTransaction,
@@ -9,46 +10,59 @@ import {
   type TransactionItem,
 } from './api';
 import { categoryLabel, formatCurrency, formatDate } from './format';
-import { Badge } from './ui/Badge';
+import { Badge, type BadgeTone } from './ui/Badge';
 import { Button } from './ui/Button';
 import { Card, CardDescription, CardHeader, CardTitle } from './ui/Card';
 import { Field, FieldGrid, Input, Select } from './ui/Field';
 import { InlineStatus } from './ui/InlineStatus';
 
-const EXPENSE_CATEGORIES = [
-  'advertising',
-  'car_and_truck',
-  'commissions_and_fees',
-  'contract_labor',
-  'insurance',
-  'interest',
-  'legal_and_professional',
-  'office_expense',
-  'rent_or_lease',
-  'repairs_and_maintenance',
-  'supplies',
-  'taxes_and_licenses',
-  'travel',
-  'meals',
-  'utilities',
-  'software_and_subscriptions',
-  'other_business_expense',
-  'equipment',
-  'education_required_materials',
-  'personal',
-];
+// The selectable vocabulary is the engine's own, so every category the form
+// offers is one the engine knows how to treat.
+const EXPENSE_CATEGORY_SLUGS = Object.keys(EXPENSE_CATEGORIES);
+const INCOME_CATEGORY_SLUGS = Object.keys(INCOME_CATEGORIES);
 
-const INCOME_CATEGORIES = [
-  'business_income',
-  'other_taxable_income',
-  'loan_proceeds',
-  'transfer',
-  'refund',
-  'gift',
-  'scholarship_refund',
-  'investment_proceeds',
-  'w2_paycheck',
-];
+const EXPENSE_CATEGORY_HINT = 'Decides the tax treatment. Choose "Personal" for anything that is not a business cost.';
+const INCOME_CATEGORY_HINT = 'Decides whether the deposit counts as business income, other income, or not income at all.';
+
+/**
+ * What the engine does with this row, read from its category alone. There is
+ * no separate "deductible" flag for the badge to disagree with (e2e audit
+ * 2026-09-16, F2): a non-deductible expense is one categorised "Personal".
+ */
+function classification(t: TransactionItem): { tone: BadgeTone; label: string } {
+  if (t.type === 'Income') {
+    if (!t.category) return { tone: 'info', label: 'Uncategorised: counted as income' };
+    const def = INCOME_CATEGORIES[t.category as keyof typeof INCOME_CATEGORIES];
+    if (!def) return { tone: 'info', label: 'Unknown category' };
+    switch (def.treatment) {
+      case 'schedule_c_gross_receipts':
+        return { tone: 'accent', label: 'Gross receipts' };
+      case 'other_income':
+        return { tone: 'accent', label: 'Other income' };
+      case 'excluded_not_modeled':
+        return { tone: 'muted', label: 'Not modeled' };
+      default:
+        return { tone: 'muted', label: 'Not income' };
+    }
+  }
+  if (!t.category) return { tone: 'info', label: 'Uncategorised: not deducted' };
+  if (isDeductibleExpenseCategory(t.category)) return { tone: 'accent', label: 'Deductible' };
+  const def = EXPENSE_CATEGORIES[t.category as keyof typeof EXPENSE_CATEGORIES];
+  if (!def) return { tone: 'info', label: 'Unknown category' };
+  switch (def.treatment) {
+    case 'qualified_education_expense':
+      return { tone: 'accent', label: 'Offsets scholarship' };
+    case 'excluded_not_modeled':
+      return { tone: 'muted', label: 'Not modeled' };
+    default:
+      return { tone: 'muted', label: t.category === 'personal' ? 'Not deductible' : 'Not deducted' };
+  }
+}
+
+function ClassificationBadge({ transaction }: { transaction: TransactionItem }) {
+  const { tone, label } = classification(transaction);
+  return <Badge tone={tone}>{label}</Badge>;
+}
 
 export interface TransactionLedgerProps {
   transactions: TransactionItem[];
@@ -63,10 +77,10 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
   const [formData, setFormData] = useState({
     amount: '',
     type: 'Expense',
-    category: 'other_business_expense',
+    // Empty until chosen: there is no safe default for how a row is taxed.
+    category: '',
     date: new Date().toISOString().slice(0, 10),
     description: '',
-    taxDeductible: true,
   });
 
   // Edit modal state
@@ -76,7 +90,6 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
     date: '',
     description: '',
     category: '',
-    taxDeductible: false,
   });
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -86,7 +99,7 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
-    if (!formData.amount) return;
+    if (!formData.amount || !formData.category) return;
     setSubmitting(true);
     setFormStatus(null);
     try {
@@ -96,15 +109,13 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
         category: formData.category,
         date: formData.date,
         description: formData.description || undefined,
-        taxDeductible: formData.type === 'Expense' ? formData.taxDeductible : false,
       });
       setFormData({
         amount: '',
         type: 'Expense',
-        category: 'other_business_expense',
+        category: '',
         date: new Date().toISOString().slice(0, 10),
         description: '',
-        taxDeductible: true,
       });
       setFormStatus({ kind: 'ok', text: 'Transaction recorded successfully.' });
       await onRefresh();
@@ -122,27 +133,24 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
       amount: tx.amount,
       date: tx.date ? new Date(tx.date).toISOString().slice(0, 10) : '',
       description: tx.description || '',
-      category: tx.category || (tx.type === 'Income' ? 'business_income' : 'other_business_expense'),
-      taxDeductible: tx.taxDeductible,
+      category: tx.category ?? '',
     });
   }
 
   async function handleSaveEdit(e: FormEvent) {
     e.preventDefault();
-    if (!editingTx) return;
+    if (!editingTx || !editFormData.category) return;
     setSavingEdit(true);
     setEditError(null);
 
     const isPlaid = Boolean(editingTx.plaidTransactionId);
     const payload: {
-      category?: string;
-      taxDeductible?: boolean;
+      category: string;
       amount?: string;
       date?: string;
       description?: string;
     } = {
       category: editFormData.category,
-      taxDeductible: editFormData.taxDeductible,
     };
 
     if (!isPlaid) {
@@ -177,6 +185,9 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
     return t.type === filterType;
   });
 
+  const newCategorySlugs = formData.type === 'Income' ? INCOME_CATEGORY_SLUGS : EXPENSE_CATEGORY_SLUGS;
+  const editCategorySlugs = editingTx?.type === 'Income' ? INCOME_CATEGORY_SLUGS : EXPENSE_CATEGORY_SLUGS;
+
   return (
     <div className="flex flex-col gap-6 md:gap-8">
       {/* Log Transaction Card */}
@@ -185,7 +196,7 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
           <div>
             <CardTitle>Log New Transaction</CardTitle>
             <CardDescription>
-              Record business expenses or gross receipts. The tax engine assigns treatment by category, never by description.
+              Record business expenses or gross receipts. The tax engine assigns treatment by category alone, never by description.
             </CardDescription>
           </div>
 
@@ -210,12 +221,9 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
                 value={formData.type}
                 onChange={(e) => {
                   const nextType = e.target.value;
-                  setFormData((f) => ({
-                    ...f,
-                    type: nextType,
-                    taxDeductible: nextType === 'Expense',
-                    category: nextType === 'Income' ? 'business_income' : 'other_business_expense',
-                  }));
+                  // The two sides have different vocabularies, so a chosen
+                  // category does not carry across.
+                  setFormData((f) => ({ ...f, type: nextType, category: '' }));
                 }}
               >
                 <option value="Expense">Expense / Operating Cost</option>
@@ -225,13 +233,21 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
           </FieldGrid>
 
           <FieldGrid>
-            <Field htmlFor="new-category" label="Tax Category">
+            <Field
+              htmlFor="new-category"
+              label="Tax Category"
+              hint={formData.type === 'Income' ? INCOME_CATEGORY_HINT : EXPENSE_CATEGORY_HINT}
+            >
               <Select
                 id="new-category"
                 value={formData.category}
                 onChange={(e) => setFormData((f) => ({ ...f, category: e.target.value }))}
+                required
               >
-                {(formData.type === 'Income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((cat) => (
+                <option value="" disabled>
+                  Select a category…
+                </option>
+                {newCategorySlugs.map((cat) => (
                   <option key={cat} value={cat}>
                     {categoryLabel(cat)}
                   </option>
@@ -264,24 +280,13 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
             />
           </Field>
 
-          {formData.type === 'Expense' && (
-            <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-fg">
-              <input
-                type="checkbox"
-                checked={formData.taxDeductible}
-                onChange={(e) => setFormData((f) => ({ ...f, taxDeductible: e.target.checked }))}
-                className="h-4 w-4 rounded border-border text-accent focus:ring-accent/30"
-              />
-              <span>Qualifies as ordinary and necessary business deduction (Schedule C)</span>
-            </label>
-          )}
-
           <div className="flex flex-wrap items-center gap-4">
             <Button
               type="submit"
               variant="primary"
               size="lg"
               loading={submitting}
+              disabled={!formData.category}
               icon={<PlusCircle size={18} aria-hidden />}
             >
               Log Transaction
@@ -339,7 +344,7 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
                     <th className="pb-3 pl-2 pr-4 font-semibold">Date</th>
                     <th className="pb-3 px-4 font-semibold">Description / Origin</th>
                     <th className="pb-3 px-4 font-semibold">Category</th>
-                    <th className="pb-3 px-4 font-semibold">Classification</th>
+                    <th className="pb-3 px-4 font-semibold">Tax treatment</th>
                     <th className="pb-3 px-4 text-right font-semibold">Amount</th>
                     <th className="pb-3 pl-4 pr-2 text-right font-semibold">Actions</th>
                   </tr>
@@ -368,13 +373,7 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
                           <Badge tone="neutral">{categoryLabel(t.category)}</Badge>
                         </td>
                         <td className="py-3.5 px-4 whitespace-nowrap">
-                          {isExpense ? (
-                            <Badge tone={t.taxDeductible ? 'accent' : 'muted'}>
-                              {t.taxDeductible ? 'Deductible' : 'Non-deductible'}
-                            </Badge>
-                          ) : (
-                            <Badge tone="accent">Gross Income</Badge>
-                          )}
+                          <ClassificationBadge transaction={t} />
                         </td>
                         <td
                           className={`py-3.5 px-4 text-right font-semibold tabular-nums whitespace-nowrap ${
@@ -441,13 +440,7 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
 
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge tone="neutral">{categoryLabel(t.category)}</Badge>
-                      {isExpense ? (
-                        <Badge tone={t.taxDeductible ? 'accent' : 'muted'}>
-                          {t.taxDeductible ? 'Deductible' : 'Non-deductible'}
-                        </Badge>
-                      ) : (
-                        <Badge tone="accent">Gross Income</Badge>
-                      )}
+                      <ClassificationBadge transaction={t} />
                     </div>
 
                     <div className="mt-1 flex items-center justify-end gap-2 border-t border-border pt-2">
@@ -492,7 +485,7 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
               <div>
                 <h3 className="text-xl font-bold">Edit Transaction</h3>
                 <p className="mt-1 text-sm text-fg-muted">
-                  Update taxonomy classification and tax-deductibility attributes.
+                  The tax category alone decides how this row is treated. Choose &ldquo;Personal&rdquo; for an expense that should not be deducted.
                 </p>
               </div>
 
@@ -501,8 +494,8 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
                   <Lock size={18} className="mt-0.5 shrink-0" aria-hidden />
                   <div className="leading-relaxed">
                     <strong>Bank-synced transaction: </strong>
-                    Amount and date are locked to prevent next sync cycle from overwriting changes. Category and
-                    tax-deductible status may be updated freely.
+                    Amount and date are locked so the next sync cannot overwrite your changes. The tax category may be
+                    updated.
                   </div>
                 </div>
               )}
@@ -540,13 +533,21 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
                 </Field>
               </FieldGrid>
 
-              <Field htmlFor="edit-category" label="Tax Category">
+              <Field
+                htmlFor="edit-category"
+                label="Tax Category"
+                hint={editingTx.type === 'Income' ? INCOME_CATEGORY_HINT : EXPENSE_CATEGORY_HINT}
+              >
                 <Select
                   id="edit-category"
                   value={editFormData.category}
                   onChange={(e) => setEditFormData((f) => ({ ...f, category: e.target.value }))}
+                  required
                 >
-                  {(editingTx.type === 'Income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((cat) => (
+                  <option value="" disabled>
+                    Select a category…
+                  </option>
+                  {editCategorySlugs.map((cat) => (
                     <option key={cat} value={cat}>
                       {categoryLabel(cat)}
                     </option>
@@ -565,25 +566,13 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
                 </Field>
               )}
 
-              {editingTx.type === 'Expense' && (
-                <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-fg">
-                  <input
-                    type="checkbox"
-                    checked={editFormData.taxDeductible}
-                    onChange={(e) => setEditFormData((f) => ({ ...f, taxDeductible: e.target.checked }))}
-                    className="h-4 w-4 rounded border-border text-accent focus:ring-accent/30"
-                  />
-                  <span>Mark as tax-deductible business expense</span>
-                </label>
-              )}
-
               {editError && <InlineStatus kind="error">{editError}</InlineStatus>}
 
               <div className="mt-2 flex items-center justify-end gap-3 border-t border-border pt-4">
                 <Button variant="secondary" onClick={() => setEditingTx(null)}>
                   Cancel
                 </Button>
-                <Button type="submit" variant="primary" loading={savingEdit}>
+                <Button type="submit" variant="primary" loading={savingEdit} disabled={!editFormData.category}>
                   Save Changes
                 </Button>
               </div>

@@ -1,6 +1,8 @@
 import { DE_MINIMIS_SAFE_HARBOR_LIMIT, EXPENSE_CATEGORIES, type ExpenseCategory } from './categories';
 import { computeHomeOffice, type HomeOfficeInput, type HomeOfficeResult } from './homeOffice';
-import { cents, isBelowZero, money, nonNegativeMoney, sum, times, ZERO, type Money, type MoneyInput } from './money';
+import { computeStandardMileageDeduction, MILEAGE_CITATIONS } from './mileage';
+import { cents, isAboveZero, isBelowZero, money, nonNegativeMoney, sum, times, ZERO, type Money, type MoneyInput } from './money';
+import type { TaxYearParameters } from './parameters/types';
 import type { Citation, Line, Warning } from './types';
 
 /**
@@ -16,6 +18,8 @@ import type { Citation, Line, Warning } from './types';
  * Lines used (2025 form):
  *   1/7   Gross receipts (no returns, cost of goods sold, or other income modeled)
  *   8-27a Expenses by category, with the §274(n) 50% limit on meals (24b)
+ *   9     Car and truck: logged miles at the standard mileage rate, or actual
+ *         vehicle costs entered under `car_and_truck`, never both
  *   28    Total expenses before home office
  *   29    Tentative profit = 7 - 28
  *   30    Home office (Form 8829 or simplified method)
@@ -31,10 +35,24 @@ export interface ExpenseItem {
   amount: MoneyInput;
 }
 
+/** One logged business trip. The date picks the standard mileage rate in force (it changed on 2026-07-01). */
+export interface MileageTrip {
+  /** ISO date, YYYY-MM-DD. */
+  date: string;
+  miles: MoneyInput;
+}
+
 export interface ScheduleCInput {
   grossReceipts: MoneyInput;
   expenses: readonly ExpenseItem[];
   homeOffice?: HomeOfficeInput | null;
+  /**
+   * Logged business trips, priced at the standard mileage rate on Schedule C
+   * line 9. Requires the tax year's parameters to be passed to
+   * `computeScheduleC`. Miles must come from a log (§274(d)); this engine
+   * never infers them.
+   */
+  mileage?: readonly MileageTrip[] | null;
 }
 
 export interface ExpenseLineResult {
@@ -47,9 +65,34 @@ export interface ExpenseLineResult {
   citation: Citation;
 }
 
+/**
+ * Schedule C line 9, car and truck expenses. A taxpayer deducts EITHER the
+ * standard mileage rate OR actual vehicle costs for a vehicle, not both
+ * (Pub. 463 ch. 4: "If you use the standard mileage rate, you can't deduct
+ * actual car expenses for that year"). Vehicles are not identified here, so
+ * when both are present the larger is applied and the other is reported.
+ */
+export interface VehicleExpenseResult {
+  /** Trips in the tax year that were priced. */
+  trips: number;
+  totalMiles: Money;
+  /** Miles x rate for every trip, before choosing a method. */
+  standardMileageBeforeMethod: Money;
+  /** Standard mileage actually deducted on line 9 (zero when actual costs were applied instead, or no trips). */
+  deduction: Money;
+  /** Amounts entered under `car_and_truck` (actual operating costs). */
+  actualVehicleExpenses: Money;
+  methodApplied: 'standard_mileage' | 'actual_expenses' | 'none';
+  /** The amount of the method NOT applied. Zero unless both were present. */
+  excluded: Money;
+  /** Total on line 9 after the method choice. */
+  line9: Money;
+}
+
 export interface ScheduleCResult {
   grossReceipts: Money;
   expenseLines: ExpenseLineResult[];
+  mileage: VehicleExpenseResult;
   /** Line 28. */
   totalExpenses: Money;
   /** Line 29. */
@@ -83,9 +126,19 @@ export const SCHEDULE_C_CITATIONS: Record<string, Citation> = {
     note: 'Deduction for food or beverages limited to 50 percent of the otherwise allowable amount.',
   },
   deMinimis: EXPENSE_CATEGORIES.equipment.citation,
+  line9: {
+    label: '2025 Instructions for Schedule C, line 9 (Car and truck expenses)',
+    url: 'https://www.irs.gov/instructions/i1040sc',
+    note: '"You can deduct the actual expenses of operating your car or truck or take the standard mileage rate." Business miles are reported in Part IV (line 44a); parking fees and tolls are added separately (not modeled).',
+  },
+  oneMethod: {
+    label: 'Pub. 463 (2025) ch. 4, Standard Mileage Rate',
+    url: 'https://www.irs.gov/publications/p463',
+    note: '"If you use the standard mileage rate, you can\'t deduct actual car expenses for that year" (other than parking fees and tolls). The choice is per vehicle and per year; the standard rate must be chosen in the first year the car is used for business.',
+  },
 };
 
-export function computeScheduleC(input: ScheduleCInput): ScheduleCResult {
+export function computeScheduleC(input: ScheduleCInput, params?: TaxYearParameters): ScheduleCResult {
   const grossReceipts = nonNegativeMoney(input.grossReceipts, 'scheduleC.grossReceipts');
   const warnings: Warning[] = [];
   const citations: Citation[] = [SCHEDULE_C_CITATIONS.form, SCHEDULE_C_CITATIONS.ordinaryNecessary];
@@ -172,7 +225,53 @@ export function computeScheduleC(input: ScheduleCInput): ScheduleCResult {
 
   expenseLines.sort((a, b) => a.category.localeCompare(b.category));
 
-  const totalExpenses = cents(sum(expenseLines.map((l) => l.deductible)));
+  // --- Line 9: car and truck ---
+  const trips = input.mileage ?? [];
+  if (trips.length > 0 && !params) {
+    throw new Error('scheduleC: mileage trips were supplied without the tax year parameters needed to price them');
+  }
+  let totalMiles: Money = ZERO;
+  let standardMileage: Money = ZERO;
+  for (const [index, trip] of trips.entries()) {
+    const priced = computeStandardMileageDeduction(trip.miles, trip.date, params as TaxYearParameters);
+    if (index === 0) citations.push(priced.period.citation, MILEAGE_CITATIONS.authority, MILEAGE_CITATIONS.substantiation);
+    totalMiles = totalMiles.plus(priced.miles);
+    standardMileage = standardMileage.plus(priced.deduction);
+  }
+  const actualLine = expenseLines.find((l) => l.category === 'car_and_truck');
+  const actualVehicleExpenses = actualLine?.deductible ?? ZERO;
+
+  let methodApplied: VehicleExpenseResult['methodApplied'] = 'none';
+  let mileageDeduction: Money = ZERO;
+  let excluded: Money = ZERO;
+  if (isAboveZero(standardMileage) && isAboveZero(actualVehicleExpenses)) {
+    // Both methods for what is, as far as the engine knows, one vehicle.
+    // Apply the larger (what a preparer would elect) and say what was left out.
+    citations.push(SCHEDULE_C_CITATIONS.oneMethod);
+    if (standardMileage.greaterThanOrEqualTo(actualVehicleExpenses)) {
+      methodApplied = 'standard_mileage';
+      mileageDeduction = standardMileage;
+      excluded = actualVehicleExpenses;
+      if (actualLine) actualLine.deductible = ZERO;
+    } else {
+      methodApplied = 'actual_expenses';
+      excluded = standardMileage;
+    }
+    warnings.push({
+      code: 'vehicle_method_conflict',
+      message: `Both logged miles (${standardMileage.toFixed(2)} at the standard rate) and actual vehicle costs (${actualVehicleExpenses.toFixed(2)}) were entered. Only one method is allowed per vehicle per year (Pub. 463 ch. 4), so the larger, ${methodApplied === 'standard_mileage' ? 'the standard mileage rate' : 'actual costs'}, was applied and the other was left out. If these are different vehicles the real deduction is larger.`,
+      amount: excluded.toFixed(2),
+    });
+  } else if (isAboveZero(standardMileage)) {
+    methodApplied = 'standard_mileage';
+    mileageDeduction = standardMileage;
+  } else if (isAboveZero(actualVehicleExpenses)) {
+    methodApplied = 'actual_expenses';
+  }
+  if (methodApplied !== 'none') citations.push(SCHEDULE_C_CITATIONS.line9);
+  const line9 = mileageDeduction.plus(actualLine?.deductible ?? ZERO);
+
+  const totalExpenses = cents(sum(expenseLines.map((l) => l.deductible)).plus(mileageDeduction));
   const tentativeProfit = grossReceipts.minus(totalExpenses);
 
   let homeOffice: HomeOfficeResult | null = null;
@@ -199,6 +298,12 @@ export function computeScheduleC(input: ScheduleCInput): ScheduleCResult {
     ...expenseLines
       .filter((l) => l.scheduleCLine)
       .map((l) => ({ ref: `Schedule C line ${l.scheduleCLine}`, label: EXPENSE_CATEGORIES[l.category].label, value: l.deductible })),
+    ...(trips.length > 0
+      ? [
+          { ref: 'Schedule C Part IV line 44a', label: `Business miles logged (${trips.length} trip${trips.length === 1 ? '' : 's'})`, value: totalMiles },
+          { ref: 'Schedule C line 9', label: 'Standard mileage rate deduction', value: mileageDeduction },
+        ]
+      : []),
     { ref: 'Schedule C line 28', label: 'Total expenses before home office', value: totalExpenses },
     { ref: 'Schedule C line 29', label: 'Tentative profit or (loss)', value: tentativeProfit },
     { ref: 'Schedule C line 30', label: 'Expenses for business use of your home', value: homeOfficeDeduction },
@@ -208,6 +313,16 @@ export function computeScheduleC(input: ScheduleCInput): ScheduleCResult {
   return {
     grossReceipts,
     expenseLines,
+    mileage: {
+      trips: trips.length,
+      totalMiles,
+      standardMileageBeforeMethod: standardMileage,
+      deduction: mileageDeduction,
+      actualVehicleExpenses,
+      methodApplied,
+      excluded,
+      line9,
+    },
     totalExpenses,
     tentativeProfit,
     homeOffice,

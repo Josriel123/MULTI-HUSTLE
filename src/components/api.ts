@@ -136,19 +136,20 @@ export interface TransactionItem {
   type: string;
   date: string;
   description: string | null;
+  /** Derived by the server from `category`; read-only for clients. Decide treatment from `category`. */
   taxDeductible: boolean;
   category: string | null;
   plaidTransactionId: string | null;
   incomeSource: IncomeSourceItem | null;
 }
 
+/** `category` alone decides the tax treatment; there is no client-set deductible flag. */
 export interface CreateTransactionInput {
   amount: string | number;
   type: string;
   description?: string;
   category: string;
   sourceName?: string;
-  taxDeductible?: boolean;
   date: string;
 }
 
@@ -157,7 +158,6 @@ export interface UpdateTransactionInput {
   date?: string;
   description?: string;
   category?: string;
-  taxDeductible?: boolean;
 }
 
 /** GET /api/transactions */

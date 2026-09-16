@@ -2,8 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import {
-  buildFederalTaxInput,
-  estimateFederalTax,
+  estimateFromRows,
   isSupportedTaxYear,
   latestSupportedTaxYear,
   SUPPORTED_TAX_YEARS,
@@ -28,10 +27,12 @@ export interface ChartMonthPoint {
  * Computes a real cumulative gross income and net income curve across all 12
  * months for the requested tax year.
  *
- * For each month (Jan through Dec), this handler runs `estimateFederalTax`
- * over the set of transactions dated through the end of that month. Because the
- * tax engine is pure functions with zero I/O, twelve evaluations are fast and
- * give a genuine cumulative net curve rather than an invented ratio.
+ * For each month (Jan through Dec), this handler runs the same
+ * `estimateFromRows` the summary route uses, over the transactions and mileage
+ * logs dated through the end of that month. Because the tax engine is pure
+ * functions with zero I/O, twelve evaluations are fast and give a genuine
+ * cumulative net curve rather than an invented ratio. The December point is,
+ * by construction, the summary route's figure for the same rows.
  */
 export async function GET(request: NextRequest) {
   const { userId } = await auth();
@@ -58,7 +59,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const [userRecord, transactions] = await Promise.all([
+    const yearRange = {
+      gte: new Date(Date.UTC(taxYear, 0, 1)),
+      lt: new Date(Date.UTC(taxYear + 1, 0, 1)),
+    };
+    const [userRecord, transactions, mileageLogs] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         // Year-scoped: one row per user per year, so an unfiltered include
@@ -70,14 +75,12 @@ export async function GET(request: NextRequest) {
         },
       }),
       prisma.transaction.findMany({
-        where: {
-          userId,
-          date: {
-            gte: new Date(Date.UTC(taxYear, 0, 1)),
-            lt: new Date(Date.UTC(taxYear + 1, 0, 1)),
-          },
-        },
+        where: { userId, date: yearRange },
         include: { incomeSource: { select: { name: true, type: true } } },
+        orderBy: { date: 'asc' },
+      }),
+      prisma.mileageLog.findMany({
+        where: { userId, date: yearRange },
         orderBy: { date: 'asc' },
       }),
     ]);
@@ -86,13 +89,13 @@ export async function GET(request: NextRequest) {
 
     for (let monthIndex = 0; monthIndex < 12; monthIndex++) {
       const monthEndExclusive = new Date(Date.UTC(taxYear, monthIndex + 1, 1));
-      const transactionsThroughMonth = transactions.filter(
-        (tx) => tx.date < monthEndExclusive
-      );
 
-      const built = buildFederalTaxInput({
+      // Same inputs as the summary route, cut off at the month end. Mileage
+      // rides along so a logged trip moves the curve (e2e audit 2026-09-16, F1).
+      const { estimate, safeToSpend } = estimateFromRows({
         taxYear,
-        transactions: transactionsThroughMonth,
+        transactions: transactions.filter((tx) => tx.date < monthEndExclusive),
+        mileageLogs: mileageLogs.filter((log) => log.date < monthEndExclusive),
         user: userRecord,
         // The compound unique on (userId, taxYear) means at most one row each.
         form1098T: userRecord?.form1098T[0] ?? null,
@@ -100,15 +103,10 @@ export async function GET(request: NextRequest) {
         homeOffice: userRecord?.homeOffice[0] ?? null,
       });
 
-      const estimate = estimateFederalTax(built.input);
-      const net = built.cashIncomeTotal
-        .minus(built.cashExpensesTotal)
-        .minus(estimate.totalTax);
-
       chartData.push({
         month: MONTH_NAMES[monthIndex],
         gross: toNumber(estimate.income.totalIncome),
-        net: toNumber(net),
+        net: toNumber(safeToSpend),
       });
     }
 

@@ -273,13 +273,29 @@ export function isExpenseCategory(value: unknown): value is ExpenseCategory {
  * mode this app exists to prevent. The engine reports the uncategorised total
  * as a warning so the UI can ask.
  *
- * Expenses default to deductible only when the user marked them
- * `taxDeductible`; everything else is personal. An unmarked expense is not
- * evidence of a business purpose.
+ * Expenses default to personal. An uncategorised expense is not evidence of a
+ * business purpose, and the category is the ONLY thing that decides an
+ * expense's tax treatment: the legacy `Transaction.taxDeductible` flag is
+ * never read by the engine (e2e audit 2026-09-16, F2). To mark an expense
+ * non-deductible, categorise it `personal`.
  */
 export const DEFAULT_INCOME_CATEGORY: IncomeCategory = 'business_income';
-export const DEFAULT_DEDUCTIBLE_EXPENSE_CATEGORY: ExpenseCategory = 'other_business_expense';
-export const DEFAULT_NONDEDUCTIBLE_EXPENSE_CATEGORY: ExpenseCategory = 'personal';
+export const DEFAULT_EXPENSE_CATEGORY: ExpenseCategory = 'personal';
+
+/** Expense categories that produce a Schedule C deduction (fully, at 50%, or up to the de minimis limit). */
+export const DEDUCTIBLE_EXPENSE_CATEGORIES: readonly ExpenseCategory[] = (Object.keys(EXPENSE_CATEGORIES) as ExpenseCategory[]).filter((key) => {
+  const treatment = EXPENSE_CATEGORIES[key].treatment;
+  return treatment === 'schedule_c_expense' || treatment === 'schedule_c_de_minimis_equipment';
+});
+
+/**
+ * Whether a category slug deducts on Schedule C. This is the single definition
+ * the API uses to derive the legacy `taxDeductible` column and the UI uses to
+ * label a row "Deductible"; nothing else may decide it.
+ */
+export function isDeductibleExpenseCategory(slug: string | null | undefined): boolean {
+  return isExpenseCategory(slug) && (DEDUCTIBLE_EXPENSE_CATEGORIES as readonly string[]).includes(slug);
+}
 
 /** De minimis safe harbor per-item limit for taxpayers without an applicable financial statement (Notice 2015-82). */
 export const DE_MINIMIS_SAFE_HARBOR_LIMIT = '2500';

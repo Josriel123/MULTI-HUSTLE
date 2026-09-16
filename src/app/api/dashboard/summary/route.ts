@@ -2,10 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import {
-  buildFederalTaxInput,
-  computeStandardMileageDeduction,
-  estimateFederalTax,
-  getTaxYearParameters,
+  estimateFromRows,
   isSupportedTaxYear,
   latestSupportedTaxYear,
   SUPPORTED_TAX_YEARS,
@@ -14,7 +11,6 @@ import {
   toPlain,
   type SourceBucket,
   type Warning,
-  ZERO,
 } from '@/lib/tax';
 
 /**
@@ -96,31 +92,20 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    const built = buildFederalTaxInput({
+    // One shared call with the chart route, so the two can never disagree about
+    // what feeds the engine. Mileage goes in here and is priced on Schedule C
+    // line 9 by the engine (e2e audit 2026-09-16, F1); nothing is priced after
+    // the fact. `safeToSpend` is the cash view for the "safe to spend" card.
+    const { built, estimate, safeToSpend: net } = estimateFromRows({
       taxYear,
       transactions,
+      mileageLogs,
       user: userRecord,
       // The compound unique on (userId, taxYear) means at most one row each.
       form1098T: userRecord?.form1098T[0] ?? null,
       form1098E: userRecord?.form1098E[0] ?? null,
       homeOffice: userRecord?.homeOffice[0] ?? null,
     });
-    const estimate = estimateFederalTax(built.input);
-
-    // Price logged business miles for the tax year
-    let totalMiles = ZERO;
-    let totalMileageDeduction = ZERO;
-    const mileageParams = getTaxYearParameters(taxYear);
-    for (const log of mileageLogs) {
-      const isoDate = log.date.toISOString().slice(0, 10);
-      const res = computeStandardMileageDeduction(log.miles, isoDate, mileageParams);
-      totalMiles = totalMiles.plus(res.miles);
-      totalMileageDeduction = totalMileageDeduction.plus(res.deduction);
-    }
-
-    // Cash view for the "safe to spend" card: what actually landed in the bank
-    // as income, less everything spent (deductible or not), less the estimated tax.
-    const net = built.cashIncomeTotal.minus(built.cashExpensesTotal).minus(estimate.totalTax);
 
     const bucket = (b: SourceBucket) => ({
       income: toNumber(b.income),
@@ -144,8 +129,10 @@ export async function GET(request: NextRequest) {
         },
         delivery: {
           ...bucket(built.bySource.delivery),
-          mileage: toNumber(totalMiles),
-          mileageDeduction: toNumber(totalMileageDeduction),
+          // Read back from the estimate, so what is displayed is what was deducted.
+          mileage: toNumber(estimate.scheduleC.mileage.totalMiles),
+          mileageDeduction: toNumber(estimate.scheduleC.mileage.deduction),
+          vehicleMethod: estimate.scheduleC.mileage.methodApplied,
         },
         other: bucket(built.bySource.other),
         scholarships: {
@@ -161,7 +148,9 @@ export async function GET(request: NextRequest) {
           incomeCount: built.uncategorised.incomeCount,
           incomeTotal: toNumber(built.uncategorised.incomeTotal),
           expenseCount: built.uncategorised.expenseCount,
+          expenseTotal: toNumber(built.uncategorised.expenseTotal),
         },
+        mileageLogs: built.mileage,
       },
       estimate: toPlain(estimate),
       warnings: [...routeWarnings, ...built.warnings, ...estimate.warnings],

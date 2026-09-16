@@ -216,7 +216,7 @@ export function estimateFederalTax(input: FederalTaxInput): FederalTaxEstimate {
   }
 
   // Schedule C.
-  const scheduleC = computeScheduleC(input.scheduleC);
+  const scheduleC = computeScheduleC(input.scheduleC, params);
   warnings.push(...scheduleC.warnings);
   citations.push(...scheduleC.citations);
 

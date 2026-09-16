@@ -1,7 +1,6 @@
 import {
-  DEFAULT_DEDUCTIBLE_EXPENSE_CATEGORY,
+  DEFAULT_EXPENSE_CATEGORY,
   DEFAULT_INCOME_CATEGORY,
-  DEFAULT_NONDEDUCTIBLE_EXPENSE_CATEGORY,
   EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
   isExpenseCategory,
@@ -11,7 +10,7 @@ import {
 } from '../categories';
 import type { FederalTaxInput } from '../engine';
 import { money, nonNegativeMoney, ZERO, type Money, type MoneyInput } from '../money';
-import type { ExpenseItem } from '../scheduleC';
+import type { ExpenseItem, MileageTrip } from '../scheduleC';
 import { isFilingStatus, type FilingStatus, type Warning } from '../types';
 
 /**
@@ -24,12 +23,17 @@ import { isFilingStatus, type FilingStatus, type Warning } from '../types';
  * rows.
  *
  * Rules applied here, and nowhere else:
- *  - Only transactions dated inside the tax year (UTC calendar year) count.
+ *  - Only transactions and trips dated inside the tax year (UTC calendar
+ *    year) count.
  *  - Income is classified by `Transaction.category` alone. With no category,
  *    a deposit is business income (see categories.ts for why). Descriptions
  *    are never read.
- *  - An expense with no category is deductible only if the user marked it
- *    `taxDeductible`.
+ *  - An expense is classified by `Transaction.category` alone. With no
+ *    category it is personal. The legacy `taxDeductible` column is NOT read:
+ *    it is derived from the category by the API and kept only for the CSV
+ *    export (e2e audit 2026-09-16, F2).
+ *  - Logged mileage becomes Schedule C line 9 input, priced by the engine at
+ *    the rate in force on each trip's date (e2e audit 2026-09-16, F1).
  *  - Filing status and dependent status come from the User row, defaulting to
  *    single / not a dependent, and the defaults are reported as assumptions.
  */
@@ -39,9 +43,15 @@ export interface TransactionRow {
   /** "Income" | "Expense" */
   type: string;
   date: Date;
-  taxDeductible: boolean;
+  /** Legacy column. Accepted so Prisma rows type-check; never read. */
+  taxDeductible?: boolean;
   category?: string | null;
   incomeSource?: { name: string; type: string } | null;
+}
+
+export interface MileageLogRow {
+  date: Date;
+  miles: MoneyInput;
 }
 
 export interface UserTaxProfileRow {
@@ -74,6 +84,8 @@ export interface HomeOfficeRow {
 export interface BuildInputArgs {
   taxYear: number;
   transactions: readonly TransactionRow[];
+  /** Logged business trips. Optional so callers that have not loaded them still work; the estimate then has no line 9 mileage. */
+  mileageLogs?: readonly MileageLogRow[] | null;
   user?: UserTaxProfileRow | null;
   form1098T?: Form1098TRow | null;
   form1098E?: Form1098ERow | null;
@@ -100,13 +112,15 @@ export interface BuiltInput {
   included: number;
   /** Transactions dated outside the tax year, ignored. */
   outsideTaxYear: number;
+  /** Mileage logs dated in / outside the tax year. */
+  mileage: { included: number; outsideTaxYear: number };
   bySource: { freelance: SourceBucket; delivery: SourceBucket; other: SourceBucket };
   /** Every in-year Expense transaction, deductible or not. Used for the "safe to spend" figure. */
   cashExpensesTotal: Money;
   /** Every in-year deposit that was counted as income. */
   cashIncomeTotal: Money;
   excludedIncome: ExcludedIncome[];
-  uncategorised: { incomeCount: number; incomeTotal: Money; expenseCount: number };
+  uncategorised: { incomeCount: number; incomeTotal: Money; expenseCount: number; expenseTotal: Money };
   warnings: Warning[];
   assumptions: string[];
 }
@@ -155,6 +169,7 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
   let uncategorisedIncomeCount = 0;
   let uncategorisedIncomeTotal: Money = ZERO;
   let uncategorisedExpenseCount = 0;
+  let uncategorisedExpenseTotal: Money = ZERO;
   let included = 0;
   let outsideTaxYear = 0;
 
@@ -215,12 +230,15 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
         if (row.category) {
           warnings.push({
             code: 'category_mismatch',
-            message: `An expense transaction is tagged with the income category ${JSON.stringify(row.category)}; the taxDeductible flag was used instead.`,
+            message: `An expense transaction is tagged with the income category ${JSON.stringify(row.category)}; it was treated as uncategorised (personal).`,
             amount: amount.toFixed(2),
           });
         }
-        category = row.taxDeductible ? DEFAULT_DEDUCTIBLE_EXPENSE_CATEGORY : DEFAULT_NONDEDUCTIBLE_EXPENSE_CATEGORY;
+        // No category means no evidence of a business purpose. The legacy
+        // taxDeductible flag is deliberately not consulted (F2).
+        category = DEFAULT_EXPENSE_CATEGORY;
         uncategorisedExpenseCount++;
+        uncategorisedExpenseTotal = uncategorisedExpenseTotal.plus(amount);
       }
       expenses.push({ category, amount });
       const treatment = EXPENSE_CATEGORIES[category].treatment;
@@ -232,11 +250,30 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
     }
   }
 
+  // Mileage: only trips in the tax year, handed to the engine as dated trips
+  // so it prices each at the rate in force that day.
+  const mileage: MileageTrip[] = [];
+  let mileageOutsideTaxYear = 0;
+  for (const log of args.mileageLogs ?? []) {
+    if (log.date.getUTCFullYear() !== args.taxYear) {
+      mileageOutsideTaxYear++;
+      continue;
+    }
+    mileage.push({ date: log.date.toISOString().slice(0, 10), miles: log.miles });
+  }
+
   if (uncategorisedIncomeCount > 0) {
     warnings.push({
       code: 'uncategorised_income',
       message: `${uncategorisedIncomeCount} deposit(s) have no tax category and were counted as business income subject to self-employment tax. If any are loans, transfers, refunds, paychecks or investment sales, categorise them: the estimate will fall.`,
       amount: uncategorisedIncomeTotal.toFixed(2),
+    });
+  }
+  if (uncategorisedExpenseCount > 0) {
+    warnings.push({
+      code: 'uncategorised_expenses',
+      message: `${uncategorisedExpenseCount} expense(s) have no tax category and were treated as personal, so nothing was deducted for them. Categorise any that are business costs: the estimate will fall.`,
+      amount: uncategorisedExpenseTotal.toFixed(2),
     });
   }
   for (const entry of excluded.values()) {
@@ -275,6 +312,7 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
     scheduleC: {
       grossReceipts,
       expenses,
+      mileage,
       homeOffice: args.homeOffice
         ? {
             totalSquareFeet: nonNegativeMoney(args.homeOffice.totalSqFt, 'homeOffice.totalSqFt'),
@@ -304,11 +342,17 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
     filingStatusSource,
     included,
     outsideTaxYear,
+    mileage: { included: mileage.length, outsideTaxYear: mileageOutsideTaxYear },
     bySource,
     cashExpensesTotal: cashExpenses,
     cashIncomeTotal: cashIncome,
     excludedIncome: [...excluded.values()],
-    uncategorised: { incomeCount: uncategorisedIncomeCount, incomeTotal: uncategorisedIncomeTotal, expenseCount: uncategorisedExpenseCount },
+    uncategorised: {
+      incomeCount: uncategorisedIncomeCount,
+      incomeTotal: uncategorisedIncomeTotal,
+      expenseCount: uncategorisedExpenseCount,
+      expenseTotal: uncategorisedExpenseTotal,
+    },
     warnings,
     assumptions,
   };

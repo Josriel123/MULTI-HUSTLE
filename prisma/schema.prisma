@@ -90,10 +90,15 @@ model Transaction {
   type           String // "Income", "Expense"
   date           DateTime
   description    String?
+  // DERIVED from `category` by the API on every write (an expense in a
+  // Schedule C category; isDeductibleExpenseCategory). Never read by the tax
+  // engine and never set from a request body; kept for the CSV export and
+  // legacy readers. Migration 20260916000000 reconciled existing rows.
   taxDeductible  Boolean       @default(false)
-  // Tax treatment, one of the keys in src/lib/tax/categories.ts. Null means
-  // not yet categorised: income defaults to business income, an expense to
-  // deductible only if taxDeductible. Replaces matching on description text.
+  // Tax treatment, one of the keys in src/lib/tax/categories.ts, and the ONLY
+  // thing that decides it. Null means not yet categorised: income defaults to
+  // business income, an expense to personal (not deducted), each with a
+  // warning in the estimate. Replaces matching on description text.
   category       String?
   userId         String
   user           User          @relation(fields: [userId], references: [id])

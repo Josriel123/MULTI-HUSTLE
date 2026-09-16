@@ -59,7 +59,7 @@ and redo the arithmetic. The test files show the arithmetic long-hand.
 | Taxable income | 1040 line 15 | `engine.ts` | |
 | Tax from the rate tables | 1040 line 16 | `incomeTax.ts` | IRC §1(j)(2); Rev. Proc. tables |
 | Total tax = income tax + SE tax + Additional Medicare; payments = box 2 + Additional Medicare withholding + estimated payments | 1040 lines 24, 25a, 25c, 26, 33 | `engine.ts` | Form 8959 Part V |
-| Standard mileage (for Phase 3's logged miles) | Schedule C 9 | `mileage.ts` | Notice 2024-08, 2025-5, 2026-10; Announcement 2026-11; Rev. Proc. 2019-46 |
+| Standard mileage on logged trips; one method per vehicle | Schedule C 9, Part IV | `scheduleC.ts` via `mileage.ts` | Notice 2024-08, 2025-5, 2026-10; Announcement 2026-11; Rev. Proc. 2019-46; Pub. 463 ch. 4 |
 
 ## Year parameters and their sources
 
@@ -85,7 +85,7 @@ Medicare thresholds, the $2,500 student-loan-interest cap, 20% for QBI, $5 and
 | Student loan interest: `min(2500, box1)` regardless of income or status | §221 phaseout by MAGI; disallowed for married filing separately and for dependents |
 | Deductions found by `description.includes('amazon')`, loans by `includes('loan')` | `Transaction.category` set by the user; descriptions are never read (`categories.ts`) |
 | Business net clamped at zero | A Schedule C loss flows through (with a warning about the loss-limitation rules that are not modeled) |
-| Mileage = income x 0.25 | Zero until miles are logged; `mileage.ts` prices logged miles |
+| Mileage = income x 0.25 | Logged trips only, priced by date on Schedule C line 9 inside the estimate |
 | Money as JavaScript floats | `Decimal` end to end; DECIMAL(12,2) in Postgres |
 | Filing status: implicit single | `User.filingStatus` (default single, reported as an assumption when defaulted) |
 
@@ -128,8 +128,32 @@ and a warning says a Form 4562 depreciation computation is required.
 and is not a Schedule C expense.
 
 Defaults when `category` is null: income is business income (and the total is
-reported in an `uncategorised_income` warning so the UI can ask); an expense
-is deductible only if the user marked it `taxDeductible`.
+reported in an `uncategorised_income` warning so the UI can ask); an expense is
+personal and not deducted (reported in an `uncategorised_expenses` warning).
+The category is the only thing that decides an expense's treatment. The
+`Transaction.taxDeductible` column is derived from the category by the API and
+is never read here; the e2e audit of 2026-09-16 (F2) found that a checkbox and
+a category which could disagree gave the user a control that did nothing.
+`DEDUCTIBLE_EXPENSE_CATEGORIES` / `isDeductibleExpenseCategory` are the single
+definition of "deducts on Schedule C" for the API and the UI.
+
+## Vehicle expenses (Schedule C line 9)
+
+Logged trips reach the engine as dated `mileage` entries on `ScheduleCInput`
+(the adapter passes `MileageLog` rows through; e2e audit 2026-09-16, F1) and
+are priced by `mileage.ts` at the standard rate in force on each trip's date,
+which matters in 2026 when the rate changed on July 1. Miles are never
+inferred; only logged miles count (§274(d) substantiation).
+
+A taxpayer may use either the standard mileage rate or actual vehicle costs for
+a vehicle, not both (Pub. 463 ch. 4: "If you use the standard mileage rate, you
+can't deduct actual car expenses for that year"). The engine does not know
+which vehicle a trip or a `car_and_truck` expense belongs to, so when both are
+present in a year it applies the larger, excludes the other, and raises
+`vehicle_method_conflict` with the excluded amount. The result is reported in
+`scheduleC.mileage` (`methodApplied`, `deduction`, `actualVehicleExpenses`,
+`excluded`, `line9`). Parking and tolls, and the first-year election rule, are
+not modeled.
 
 ## Not modeled
 

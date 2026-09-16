@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { isExpenseCategory, isIncomeCategory } from '@/lib/tax';
+import { isDeductibleExpenseCategory, isExpenseCategory, isIncomeCategory } from '@/lib/tax';
 
 /**
  * PATCH /api/transactions/[id]
@@ -15,8 +15,13 @@ import { isExpenseCategory, isIncomeCategory } from '@/lib/tax';
  * Plaid constraint:
  * Transactions synchronized via Plaid (`plaidTransactionId != null`) are immutable
  * with respect to `amount` and `date`, because subsequent sync runs overwrite them.
- * Callers may update `category` and `taxDeductible`. If `amount` or `date` alterations
- * are attempted on a Plaid transaction, the route returns 400 with an explicit error.
+ * Callers may update `category`. If `amount` or `date` alterations are attempted
+ * on a Plaid transaction, the route returns 400 with an explicit error.
+ *
+ * Tax treatment (e2e audit 2026-09-16, F2):
+ * `category` alone decides it. `taxDeductible` is derived from the category
+ * whenever the category changes and is never taken from the body; a body value
+ * is ignored. Categorise an expense `personal` to make it non-deductible.
  */
 export async function PATCH(
   request: NextRequest,
@@ -42,7 +47,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { amount, date, description, category, taxDeductible, incomeSourceId } = body;
+    const { amount, date, description, category, incomeSourceId } = body;
 
     const isPlaid = Boolean(existing.plaidTransactionId);
 
@@ -53,7 +58,7 @@ export async function PATCH(
           return NextResponse.json(
             {
               error:
-                'Cannot modify amount of a Plaid-sourced transaction; next bank sync would overwrite it. Only category and tax deductible status may be edited.',
+                'Cannot modify amount of a Plaid-sourced transaction; next bank sync would overwrite it. Only the tax category may be edited.',
             },
             { status: 400 }
           );
@@ -67,7 +72,7 @@ export async function PATCH(
           return NextResponse.json(
             {
               error:
-                'Cannot modify date of a Plaid-sourced transaction; next bank sync would overwrite it. Only category and tax deductible status may be edited.',
+                'Cannot modify date of a Plaid-sourced transaction; next bank sync would overwrite it. Only the tax category may be edited.',
             },
             { status: 400 }
           );
@@ -106,14 +111,9 @@ export async function PATCH(
       }
     }
 
-    if (taxDeductible !== undefined) {
-      dataToUpdate.taxDeductible = Boolean(taxDeductible);
-    }
-
     if (category !== undefined) {
-      if (!category) {
-        dataToUpdate.category = null;
-      } else {
+      let nextCategory: string | null = null;
+      if (category) {
         const targetType = existing.type;
         if (targetType === 'Income' && !isIncomeCategory(category)) {
           return NextResponse.json({ error: `Category "${category}" is not a valid income category.` }, { status: 400 });
@@ -121,8 +121,13 @@ export async function PATCH(
         if (targetType === 'Expense' && !isExpenseCategory(category)) {
           return NextResponse.json({ error: `Category "${category}" is not a valid expense category.` }, { status: 400 });
         }
-        dataToUpdate.category = category;
+        nextCategory = category;
       }
+      dataToUpdate.category = nextCategory;
+      // The flag follows the category and is never set from the body. The
+      // validation above already guarantees an income row cannot carry an
+      // expense category, so the category alone decides.
+      dataToUpdate.taxDeductible = isDeductibleExpenseCategory(nextCategory);
     }
 
     const updated = await prisma.transaction.update({

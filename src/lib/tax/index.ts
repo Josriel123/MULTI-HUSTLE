@@ -21,3 +21,4 @@ export * from './mileage';
 export * from './disclaimer';
 export * from './engine';
 export * from './adapters/prismaRows';
+export * from './adapters/estimateFromRows';

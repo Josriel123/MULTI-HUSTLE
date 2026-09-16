@@ -38,26 +38,28 @@ describe('buildFederalTaxInput', () => {
       ['loan_proceeds', '7000.00'],
     ]);
 
-    // Expenses: equipment keeps its category; taxDeductible with no category -> other_business_expense; otherwise personal.
-    expect(built.input.scheduleC.expenses.map((e) => e.category)).toEqual(['equipment', 'other_business_expense', 'personal']);
+    // Expenses: equipment keeps its category; no category is personal whatever the legacy flag says (e2e audit F2).
+    expect(built.input.scheduleC.expenses.map((e) => e.category)).toEqual(['equipment', 'personal', 'personal']);
     expectMoney(built.cashExpensesTotal, '2580.00');
 
     // Display buckets by IncomeSource.type only.
     expectMoney(built.bySource.freelance.income, '18400.00');
-    expectMoney(built.bySource.freelance.deductibleExpenses, '2500.00');
+    expectMoney(built.bySource.freelance.deductibleExpenses, '2200.00');
     expectMoney(built.bySource.delivery.income, '5650.00');
     expectMoney(built.bySource.other.income, '0.00'); // excluded investment proceeds are not income
 
     expect(built.uncategorised).toMatchObject({ incomeCount: 1, expenseCount: 2 });
     expectMoney(built.uncategorised.incomeTotal, '5650.00');
+    expectMoney(built.uncategorised.expenseTotal, '380.00');
     const codes = built.warnings.map((w) => w.code);
     expect(codes).toContain('uncategorised_income');
+    expect(codes).toContain('uncategorised_expenses');
     expect(codes).toContain('excluded_not_modeled_investment_proceeds');
     expect(codes).not.toContain('excluded_not_modeled_loan_proceeds'); // loans are simply not income; nothing to flag
 
     // The built input runs end to end.
     const e = estimateFederalTax(built.input);
-    expectMoney(e.scheduleC.netProfit, '21550.00'); // 24,050 - 2,200 - 300
+    expectMoney(e.scheduleC.netProfit, '21850.00'); // 24,050 - 2,200; the two uncategorised expenses are personal
   });
 
   it('defaults to single / not a dependent when the profile is missing, and says so', () => {
@@ -139,7 +141,9 @@ describe('buildFederalTaxInput', () => {
       taxYear: 2025,
       transactions: [{ amount: '50', type: 'Expense', date: d('2025-03-01'), taxDeductible: true, category: 'business_income' }],
     });
-    expect(built.input.scheduleC.expenses[0].category).toBe('other_business_expense');
+    // Wrong-side category is no category, and no category is personal, whatever the legacy flag says.
+    expect(built.input.scheduleC.expenses[0].category).toBe('personal');
     expect(built.warnings.map((w) => w.code)).toContain('category_mismatch');
+    expect(built.warnings.map((w) => w.code)).toContain('uncategorised_expenses');
   });
 });
