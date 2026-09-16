@@ -1,13 +1,17 @@
 # Migrations
 
-Three migrations, generated with `prisma migrate diff` from the schema before
-and after Phase 2, so the SQL is reviewable rather than implied by `db push`.
+The Phase 2 migrations were generated with `prisma migrate diff` from the
+schema before and after, so the SQL is reviewable rather than implied by
+`db push`. Later ones are hand-written and tested.
 
 | Migration | What it does |
 |---|---|
 | `20260909000000_init` | Baseline: the Phase 1 schema exactly as it existed with `Float` money columns. |
 | `20260909000100_money_decimal` | `ALTER COLUMN ... SET DATA TYPE DECIMAL(12,2)` on the eight `Float` columns across `Transaction`, `Form1098T`, `Form1098E`, `HomeOfficeDeduction`. Nothing else. |
 | `20260909000200_tax_profile_and_category` | Additive: `User.filingStatus TEXT NOT NULL DEFAULT 'single'`, `User.claimedAsDependent BOOLEAN NOT NULL DEFAULT false`, `Transaction.category TEXT NULL`. |
+| `20260910000000_mileage_log` | Phase 3: the `MileageLog` table. |
+| `20260910000100_form_tax_year` | Phase 3.5: `taxYear` on `Form1098T`, `Form1098E`, `HomeOfficeDeduction` under `@@unique([userId, taxYear])`. |
+| `20260916000000_category_is_source_of_truth` | Data only, no schema change (e2e audit F2). Expense rows with `taxDeductible = false` in a Schedule C category move to `personal`; rows with `taxDeductible = true` and no category get `other_business_expense` (the treatment they already received); then `taxDeductible` is recomputed from the category for every row. Idempotent and null-safe (`COALESCE(category IN (...), false)`). The deductible list must match `DEDUCTIBLE_EXPENSE_CATEGORIES` in `src/lib/tax/categories.ts`; `src/lib/tax/__tests__/migrations.test.ts` runs every migration on PGlite, seeds eleven rows covering each case, and asserts the outcome, the row count, the amount sum, idempotency and the list match. |
 
 ## Status
 
