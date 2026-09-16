@@ -108,6 +108,22 @@ export default function CPAExporter() {
   const scholarText = summaryData?.sources.scholarships.textbookSavings;
   const scholarLoan = summaryData?.sources.scholarships.loanInterestDeduction;
 
+  // Provenance, stated rather than asserted. This organizer is handed to a tax
+  // preparer, and it previously claimed "Plaid-verified ledger integrity"
+  // unconditionally — including on accounts that had never linked a bank and
+  // held nothing but hand-typed rows. Count what is actually here instead.
+  const rowCount = transactionData?.length ?? 0;
+  const importedCount = transactionData?.filter((t) => t.plaidTransactionId !== null).length ?? 0;
+  const manualCount = rowCount - importedCount;
+  const provenanceLabel =
+    rowCount === 0
+      ? 'No transactions recorded'
+      : importedCount === 0
+        ? `${manualCount} ${manualCount === 1 ? 'entry' : 'entries'}, all entered manually`
+        : manualCount === 0
+          ? `${importedCount} ${importedCount === 1 ? 'entry' : 'entries'}, all imported from a linked bank`
+          : `${importedCount} imported from a linked bank, ${manualCount} entered manually`;
+
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 pb-12 md:gap-8">
       {/* Exporter Controls (Hidden on Print) */}
@@ -157,11 +173,11 @@ export default function CPAExporter() {
             <div className="flex flex-col gap-1 text-sm text-fg-muted sm:text-right">
               <div className="flex items-center gap-2 sm:justify-end">
                 <TrendingUp size={18} className="text-accent" aria-hidden />
-                <span className="font-semibold text-fg">Multi-Hustle OS Verified</span>
+                <span className="font-semibold text-fg">Multi-Hustle Tax Organizer</span>
               </div>
               <div className="flex items-center gap-1.5 sm:justify-end">
                 <CheckCircle2 size={15} className="text-info" aria-hidden />
-                <span>Plaid-verified ledger integrity</span>
+                <span>{provenanceLabel}</span>
               </div>
               <div className="flex items-center gap-1.5 sm:justify-end text-fg-faint">
                 <Calendar size={14} aria-hidden />
@@ -291,7 +307,8 @@ export default function CPAExporter() {
             <div className="flex flex-col gap-2 sm:items-end">
               <span className="text-sm font-semibold">Preparer / CPA Review:</span>
               <div className="h-8 w-64 border-b border-fg-muted" />
-              <span className="text-xs text-fg-faint">Verified against source bank and tax documents.</span>
+              {/* An attestation the preparer signs, not a claim this app makes. */}
+              <span className="text-xs text-fg-faint">Reviewed against source documents.</span>
             </div>
           </div>
         </div>
