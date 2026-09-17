@@ -5,7 +5,7 @@ import { Home, Info, Save } from 'lucide-react';
 import { EstimateNotice } from '@/components/EstimateNotice';
 import { TaxYearSelect } from '@/components/TaxYearSelect';
 import { useTaxYear } from '@/components/useTaxYear';
-import { fetchHomeOfficeForm, fetchSummary, saveHomeOfficeForm, type SummaryResponse } from '@/components/api';
+import { errorText, fetchHomeOfficeForm, fetchSummary, saveHomeOfficeForm, type SummaryResponse } from '@/components/api';
 import { formatCurrency, formatPercent, homeOfficeMethodLabel } from '@/components/format';
 import { Button } from '@/components/ui/Button';
 import { Busy } from '@/components/ui/Busy';
@@ -33,6 +33,9 @@ export default function HomeOfficePage() {
   const [taxYear, setTaxYear] = useTaxYear();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  /** The year the form endpoint answered for; independent of the estimate. */
+  const [formYear, setFormYear] = useState<number | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   // Loading is derived: busy until the response for the requested year has landed (or failed).
@@ -42,26 +45,40 @@ export default function HomeOfficePage() {
 
   useEffect(() => {
     let ignore = false;
-    Promise.all([fetchHomeOfficeForm(taxYear), fetchSummary(taxYear)])
+    // allSettled, not all. This is the page you would come to in order to fix
+    // a bad home office record, so it must not be disabled by the estimate
+    // that record breaks. The e2e audit found it blank with Save greyed out —
+    // the form data had loaded, but Promise.all rejected before it applied.
+    Promise.allSettled([fetchHomeOfficeForm(taxYear), fetchSummary(taxYear)])
       .then(([formRes, summaryRes]) => {
         if (ignore) return;
-        setForm(
-          formRes.form
-            ? {
-                totalSqFt: String(formRes.form.totalSqFt),
-                officeSqFt: String(formRes.form.officeSqFt),
-                rentAmount: String(formRes.form.rentAmount),
-                utilitiesAmount: String(formRes.form.utilitiesAmount),
-              }
-            : EMPTY_FORM,
-        );
-        setSummary(summaryRes);
-        setStatus(null);
-      })
-      .catch((err: unknown) => {
-        if (ignore) return;
-        console.error('Failed to load home office data', err);
-        setStatus({ kind: 'error', text: err instanceof Error ? err.message : 'Failed to load.' });
+
+        if (formRes.status === 'fulfilled') {
+          setForm(
+            formRes.value.form
+              ? {
+                  totalSqFt: String(formRes.value.form.totalSqFt),
+                  officeSqFt: String(formRes.value.form.officeSqFt),
+                  rentAmount: String(formRes.value.form.rentAmount),
+                  utilitiesAmount: String(formRes.value.form.utilitiesAmount),
+                }
+              : EMPTY_FORM,
+          );
+          setFormYear(formRes.value.taxYear);
+          setStatus(null);
+        } else {
+          console.error('Failed to load the home office form', formRes.reason);
+          setStatus({ kind: 'error', text: errorText(formRes.reason, 'Failed to load.') });
+        }
+
+        if (summaryRes.status === 'fulfilled') {
+          setSummary(summaryRes.value);
+          setSummaryError(null);
+        } else {
+          console.error('Failed to load the estimate', summaryRes.reason);
+          setSummary(null);
+          setSummaryError(errorText(summaryRes.reason, 'The estimate could not be calculated.'));
+        }
       })
       .finally(() => {
         if (!ignore) setResolvedKey(requestKey);
@@ -71,21 +88,39 @@ export default function HomeOfficePage() {
     };
   }, [taxYear, requestKey]);
 
-  const shownYear = summary?.taxYear ?? taxYear;
+  // From the form endpoint, not the estimate. Deriving it from the estimate
+  // left it undefined whenever the estimate failed, which disabled Save on the
+  // one page that can repair the record causing the failure.
+  const shownYear = formYear ?? summary?.taxYear ?? taxYear;
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
     if (shownYear === undefined) return;
     setSaving(true);
     setStatus(null);
+
+    // The save and the refresh are reported separately. They used to share one
+    // try block, so a failing estimate produced "Failed to save" after the row
+    // had already been written — the audit saw exactly that and concluded its
+    // invalid entry had been rejected when it had in fact been stored.
     try {
       await saveHomeOfficeForm({ taxYear: shownYear, ...form });
+    } catch (err: unknown) {
+      setStatus({ kind: 'error', text: errorText(err, 'Failed to save.') });
+      setSaving(false);
+      return;
+    }
+
+    try {
       // Re-run the estimate so the comparison reflects what was just saved.
       const refreshed = await fetchSummary(shownYear);
       setSummary(refreshed);
+      setSummaryError(null);
       setStatus({ kind: 'ok', text: `Saved for tax year ${shownYear}. The estimate has been updated.` });
     } catch (err: unknown) {
-      setStatus({ kind: 'error', text: err instanceof Error ? err.message : 'Failed to save.' });
+      setSummary(null);
+      setSummaryError(errorText(err, 'The estimate could not be recalculated.'));
+      setStatus({ kind: 'ok', text: `Saved for tax year ${shownYear}.` });
     } finally {
       setSaving(false);
     }
@@ -188,6 +223,15 @@ export default function HomeOfficePage() {
             )}
           </Card>
         </div>
+
+        {/* Name the problem rather than showing an empty comparison. The form
+            above stays usable, which is the point — this is the page you fix
+            a bad record from. */}
+        {summaryError && (
+          <InlineStatus kind="error">
+            {summaryError} The form above still works; correct the values and save to recalculate.
+          </InlineStatus>
+        )}
 
         <EstimateNotice
           disclaimer={summary?.disclaimer}

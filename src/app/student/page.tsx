@@ -6,6 +6,7 @@ import { EstimateNotice } from '@/components/EstimateNotice';
 import { TaxYearSelect } from '@/components/TaxYearSelect';
 import { useTaxYear } from '@/components/useTaxYear';
 import {
+  errorText,
   fetchForm1098E,
   fetchForm1098T,
   fetchSummary,
@@ -36,6 +37,9 @@ export default function StudentPage() {
   const [box1E, setBox1E] = useState('');
 
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  /** The year the form endpoints answered for; independent of the estimate. */
+  const [formYear, setFormYear] = useState<number | undefined>(undefined);
   const [savingT, setSavingT] = useState(false);
   const [savingE, setSavingE] = useState(false);
   const [statusT, setStatusT] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
@@ -48,20 +52,43 @@ export default function StudentPage() {
 
   useEffect(() => {
     let ignore = false;
-    Promise.all([fetchForm1098T(taxYear), fetchForm1098E(taxYear), fetchSummary(taxYear)])
+    // allSettled, not all. These three requests are independent, and the
+    // estimate is the one that can fail for a reason that has nothing to do
+    // with this page — the e2e audit saved an invalid home office record and
+    // this page went blank with its Save buttons disabled, because Promise.all
+    // rejected before the 1098-T and 1098-E responses could be applied.
+    // A failing estimate should cost you the estimate, not the forms.
+    Promise.allSettled([fetchForm1098T(taxYear), fetchForm1098E(taxYear), fetchSummary(taxYear)])
       .then(([tRes, eRes, summaryRes]) => {
         if (ignore) return;
-        setBox1(tRes.form ? String(tRes.form.box1) : '');
-        setBox5(tRes.form ? String(tRes.form.box5) : '');
-        setBox1E(eRes.form ? String(eRes.form.box1) : '');
-        setSummary(summaryRes);
-        setStatusT(null);
-        setStatusE(null);
-      })
-      .catch((err: unknown) => {
-        if (ignore) return;
-        console.error('Failed to load student education tax data', err);
-        setStatusT({ kind: 'error', text: err instanceof Error ? err.message : 'Failed to load data.' });
+
+        if (tRes.status === 'fulfilled') {
+          setBox1(tRes.value.form ? String(tRes.value.form.box1) : '');
+          setBox5(tRes.value.form ? String(tRes.value.form.box5) : '');
+          setFormYear(tRes.value.taxYear);
+          setStatusT(null);
+        } else {
+          console.error('Failed to load Form 1098-T', tRes.reason);
+          setStatusT({ kind: 'error', text: errorText(tRes.reason, 'Failed to load Form 1098-T.') });
+        }
+
+        if (eRes.status === 'fulfilled') {
+          setBox1E(eRes.value.form ? String(eRes.value.form.box1) : '');
+          setFormYear((y) => y ?? eRes.value.taxYear);
+          setStatusE(null);
+        } else {
+          console.error('Failed to load Form 1098-E', eRes.reason);
+          setStatusE({ kind: 'error', text: errorText(eRes.reason, 'Failed to load Form 1098-E.') });
+        }
+
+        if (summaryRes.status === 'fulfilled') {
+          setSummary(summaryRes.value);
+          setSummaryError(null);
+        } else {
+          console.error('Failed to load the estimate', summaryRes.reason);
+          setSummary(null);
+          setSummaryError(errorText(summaryRes.reason, 'The estimate could not be calculated.'));
+        }
       })
       .finally(() => {
         if (!ignore) setResolvedKey(requestKey);
@@ -71,7 +98,10 @@ export default function StudentPage() {
     };
   }, [taxYear, requestKey]);
 
-  const shownYear = summary?.taxYear ?? taxYear;
+  // Taken from the form responses, which answer for this page alone. Deriving
+  // it from the estimate meant a broken estimate left it undefined, which
+  // disabled the Save buttons and made the page unusable for recovery.
+  const shownYear = formYear ?? summary?.taxYear ?? taxYear;
 
   async function handleSaveT(e: FormEvent) {
     e.preventDefault();
@@ -334,6 +364,16 @@ export default function StudentPage() {
             )}
           </Card>
         </div>
+
+        {/* The estimate can fail for reasons that have nothing to do with this
+            page — an invalid home office record, for instance. Say so, rather
+            than rendering an empty notice and leaving the figures above
+            looking merely absent. */}
+        {summaryError && (
+          <InlineStatus kind="error">
+            {summaryError} The forms on this page still work; the figures above come from the estimate.
+          </InlineStatus>
+        )}
 
         {/* Mandatory EstimateNotice */}
         <EstimateNotice

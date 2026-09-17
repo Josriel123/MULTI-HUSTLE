@@ -307,3 +307,16 @@ export async function saveForm1098E(input: SaveForm1098EInput): Promise<void> {
     }),
   );
 }
+
+/**
+ * Message for a rejected request, for pages that load several independently.
+ *
+ * Server errors carry a message worth showing — "Office area (1001.00 sq ft)
+ * cannot exceed the total home area" tells the user what to change, where a
+ * generic string does not. Falls back when the failure has no useful text.
+ */
+export function errorText(reason: unknown, fallback: string): string {
+  if (reason instanceof Error && reason.message) return reason.message;
+  if (typeof reason === 'string' && reason.trim() !== '') return reason;
+  return fallback;
+}

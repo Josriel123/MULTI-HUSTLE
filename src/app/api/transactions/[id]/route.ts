@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { isDeductibleExpenseCategory, isExpenseCategory, isIncomeCategory } from '@/lib/tax';
+import { parseMoneyInput } from '@/lib/validation';
 
 /**
  * PATCH /api/transactions/[id]
@@ -84,7 +85,14 @@ export async function PATCH(
 
     if (!isPlaid) {
       if (amount !== undefined && amount !== null) {
-        dataToUpdate.amount = new Prisma.Decimal(amount).abs();
+        // Was .abs(), which turned a submitted -9 into a stored 9 with no
+        // explanation: the editor reopened showing 9.00 and the user had no
+        // way to know their input had been rewritten.
+        const parsedAmount = parseMoneyInput(amount, 'Amount');
+        if (!parsedAmount.ok) {
+          return NextResponse.json({ error: parsedAmount.error }, { status: 400 });
+        }
+        dataToUpdate.amount = parsedAmount.value;
       }
       if (date !== undefined && date !== null) {
         const parsedDate = new Date(date);

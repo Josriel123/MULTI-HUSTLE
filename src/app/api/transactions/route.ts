@@ -1,10 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
 import { auth } from '@clerk/nextjs/server';
 import { requireUser } from '@/lib/user';
 import { isDeductibleExpenseCategory, isExpenseCategory, isIncomeCategory } from '@/lib/tax';
 import { resolveTaxYear } from '@/lib/taxYear';
+import { parseMoneyInput } from '@/lib/validation';
 
 /**
  * Money-over-the-wire contract:
@@ -41,16 +41,15 @@ export async function POST(req: Request) {
     const data = await req.json();
     const { amount, type, description, sourceName, category, date } = data;
 
-    if (amount === undefined || amount === null || String(amount).trim() === '') {
-      return NextResponse.json({ error: 'Amount is required' }, { status: 400 });
+    // Rejects rather than corrects: negative, non-numeric, or beyond what
+    // DECIMAL(12,2) holds. The out-of-range case previously reached Prisma and
+    // surfaced as "Failed to post transaction", which named neither the field
+    // nor the limit.
+    const parsedAmount = parseMoneyInput(amount, 'Amount');
+    if (!parsedAmount.ok) {
+      return NextResponse.json({ error: parsedAmount.error }, { status: 400 });
     }
-
-    let decimalAmount: Prisma.Decimal;
-    try {
-      decimalAmount = new Prisma.Decimal(amount).abs();
-    } catch {
-      return NextResponse.json({ error: 'Invalid decimal amount' }, { status: 400 });
-    }
+    const decimalAmount = parsedAmount.value;
 
     const txType = type === 'Income' ? 'Income' : 'Expense';
 

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@clerk/nextjs/server';
 import { requireUser } from '@/lib/user';
 import { resolveTaxYear, resolveTaxYearFromRequest } from '@/lib/taxYear';
+import { parseHomeOfficeInput } from '@/lib/validation';
 
 /**
  * Home office deduction inputs, scoped to a tax year.
@@ -26,21 +27,16 @@ export async function POST(request: NextRequest) {
     if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 400 });
     const { taxYear } = resolved;
 
-    const tSqFt = parseFloat(body.totalSqFt);
-    const oSqFt = parseFloat(body.officeSqFt);
-    const rent = parseFloat(body.rentAmount);
-    const utils = parseFloat(body.utilitiesAmount);
-
-    if ([tSqFt, oSqFt, rent, utils].some(Number.isNaN)) {
-      return NextResponse.json({ error: 'Invalid numbers provided' }, { status: 400 });
+    // Validate the record as a whole before persisting it. This used to check
+    // only for NaN and clamp negatives to zero with Math.max, so an office
+    // larger than the home was stored and the engine rejected it on every
+    // later estimate — which blanked the dashboard and the student forms too.
+    // Refuse it here, while the previous valid record is still intact.
+    const parsed = parseHomeOfficeInput(body);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
-
-    const values = {
-      totalSqFt: Math.max(0, tSqFt),
-      officeSqFt: Math.max(0, oSqFt),
-      rentAmount: Math.max(0, rent),
-      utilitiesAmount: Math.max(0, utils),
-    };
+    const values = parsed.values;
 
     const homeOffice = await prisma.homeOfficeDeduction.upsert({
       where: { userId_taxYear: { userId, taxYear } },
