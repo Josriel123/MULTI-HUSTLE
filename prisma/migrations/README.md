@@ -15,13 +15,39 @@ schema before and after, so the SQL is reviewable rather than implied by
 
 ## Status
 
-Applied to the main Neon database on 2026-09-09 (baseline resolved, then
-`migrate deploy`). Before and after: 26 transactions summing to 50,752.38, one
-Form 1098-T, one home office row, two users, all unchanged; the eight money
-columns are `numeric(12,2)` and the three new columns carry their defaults.
-`npx prisma migrate status` reports "Database schema is up to date". From here
-on, schema changes go through `prisma migrate` so `_prisma_migrations` stays
-in step; `db push` would leave it behind.
+The Phase 2 migrations were applied to the main Neon database on 2026-09-09
+(baseline resolved, then `migrate deploy`). Before and after: 26 transactions
+summing to 50,752.38, one Form 1098-T, one home office row, two users, all
+unchanged; the eight money columns are `numeric(12,2)` and the three new
+columns carry their defaults. From here on, schema changes go through
+`prisma migrate` so `_prisma_migrations` stays in step; `db push` would leave
+it behind.
+
+**`20260916000000_category_is_source_of_truth` is committed but NOT yet
+applied to main** (2026-09-16: the agent's `prisma migrate deploy` was refused
+by the auto-mode permission classifier as a production change). Run:
+
+```bash
+npx prisma migrate deploy
+```
+
+Measured on main immediately before, read-only: 31 transactions summing to
+101,135.83. The script will touch exactly four rows, all manual entries:
+
+| Row | Before | After |
+|---|---|---|
+| $123.45 office expense, 2025-06-15, "E2E AUDIT edited prior-year expense" | `office_expense`, flag false | `personal`, flag false |
+| $2,200.00 "Hardware written off", 2023-05-05 | no category, flag true | `other_business_expense`, flag true |
+| $500.00 "gas", 2026-04-18 | no category, flag true | `other_business_expense`, flag true |
+| $200.00 "Gas", 2026-04-18 | no category, flag true | `other_business_expense`, flag true |
+
+No Plaid-synced row changes; no row with an unknown category string exists.
+Until it runs, the engine (which no longer reads the flag) deducts the $123.45
+office expense for 2025 and treats the three uncategorised rows as personal
+with an `uncategorised_expenses` warning; after it runs, the audit row is
+personal and the three rows are deducted as before. Row count and amount sum
+must be unchanged afterwards; the two "gas" rows are worth re-categorising as
+`car_and_truck` by hand so the one-method vehicle rule sees them.
 
 ## Applying to another existing database (created with `db push`)
 
