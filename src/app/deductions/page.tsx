@@ -6,6 +6,7 @@ import { EstimateNotice } from '@/components/EstimateNotice';
 import { MileageSection } from '@/components/MileageSection';
 import { TaxYearSelect } from '@/components/TaxYearSelect';
 import { TransactionLedger } from '@/components/TransactionLedger';
+import { useTaxYear } from '@/components/useTaxYear';
 import {
   fetchMileage,
   fetchSummary,
@@ -26,7 +27,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
  * priced via statutory IRS standard mileage rate parameters.
  */
 export default function DeductionsPage() {
-  const [taxYear, setTaxYear] = useState<number | undefined>(undefined);
+  const [taxYear, setTaxYear] = useTaxYear();
   const [activeTab, setActiveTab] = useState<'transactions' | 'mileage'>('transactions');
 
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
@@ -135,6 +136,7 @@ export default function DeductionsPage() {
             logs={mileageLogs}
             totalMiles={totalMiles}
             totalDeduction={totalMileageDeduction}
+            taxYear={shownYear}
             onRefresh={loadData}
           />
         )}
@@ -144,6 +146,7 @@ export default function DeductionsPage() {
           disclaimer={summary?.disclaimer}
           warnings={summary?.warnings}
           assumptions={summary?.assumptions}
+          notModeled={summary?.notModeled}
         />
       </Busy>
     </div>

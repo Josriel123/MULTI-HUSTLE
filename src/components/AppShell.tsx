@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useState, type ReactNode } from 'react';
 import { Menu, Shield, TrendingUp, X } from 'lucide-react';
 import { Show, SignInButton, UserButton } from '@clerk/nextjs';
 import SidebarNav from './SidebarNav';
@@ -42,7 +42,9 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
           </Button>
         )}
       </div>
-      <SidebarNav onNavigate={onNavigate} />
+      <Suspense fallback={<nav aria-label="Primary" className="flex flex-1 flex-col gap-1 px-4" />}>
+        <SidebarNav onNavigate={onNavigate} />
+      </Suspense>
       <SecurityNote />
     </>
   );
@@ -127,7 +129,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-8">{children}</main>
+        <main className="flex-1 p-4 md:p-8">
+          <Suspense fallback={null}>{children}</Suspense>
+        </main>
       </div>
     </div>
   );

@@ -1,9 +1,10 @@
-import { NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { auth } from '@clerk/nextjs/server';
 import { requireUser } from '@/lib/user';
 import { isDeductibleExpenseCategory, isExpenseCategory, isIncomeCategory } from '@/lib/tax';
+import { resolveTaxYear } from '@/lib/taxYear';
 
 /**
  * Money-over-the-wire contract:
@@ -109,15 +110,25 @@ export async function POST(req: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const resolved = resolveTaxYear(request.nextUrl.searchParams.get('taxYear'));
+  if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 400 });
+  const { taxYear } = resolved;
+
   try {
     const transactions = await prisma.transaction.findMany({
-      where: { userId },
+      where: {
+        userId,
+        date: {
+          gte: new Date(Date.UTC(taxYear, 0, 1)),
+          lt: new Date(Date.UTC(taxYear + 1, 0, 1)),
+        },
+      },
       orderBy: { date: 'desc' },
-      include: { incomeSource: true }
+      include: { incomeSource: true },
     });
 
     const formatted = transactions.map((tx) => ({

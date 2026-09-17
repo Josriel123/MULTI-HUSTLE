@@ -33,6 +33,22 @@ export function formatCurrency(value: number | string | null | undefined, option
   return (options.cents ? CENTS : WHOLE_DOLLARS).format(n);
 }
 
+/**
+ * Default date string (YYYY-MM-DD) for transaction and mileage entry forms.
+ *
+ * e2e audit 2026-09-16, F4:
+ * When viewing a prior or future tax year, forms should default within that
+ * tax year rather than today's date, preventing accidental entry into the wrong year.
+ */
+export function defaultTransactionDate(taxYear?: number): string {
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  if (!taxYear || taxYear === currentYear) {
+    return today.toISOString().slice(0, 10);
+  }
+  return `${taxYear}-01-01`;
+}
+
 /** Miles with one decimal at most, e.g. "1,204.5 mi". */
 export function formatMiles(value: number | string | null | undefined): string {
   if (value === null || value === undefined || value === '') return '—';

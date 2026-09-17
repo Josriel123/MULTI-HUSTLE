@@ -9,7 +9,7 @@ import {
   updateTransaction,
   type TransactionItem,
 } from './api';
-import { categoryLabel, formatCurrency, formatDate } from './format';
+import { categoryLabel, defaultTransactionDate, formatCurrency, formatDate } from './format';
 import { Badge, type BadgeTone } from './ui/Badge';
 import { Button } from './ui/Button';
 import { Card, CardDescription, CardHeader, CardTitle } from './ui/Card';
@@ -76,18 +76,27 @@ export interface TransactionLedgerProps {
   onRefresh: () => Promise<void>;
 }
 
-export function TransactionLedger({ transactions, onRefresh }: TransactionLedgerProps) {
+export function TransactionLedger({ transactions, taxYear, onRefresh }: TransactionLedgerProps) {
   // New transaction form state
   const [submitting, setSubmitting] = useState(false);
   const [formStatus, setFormStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => ({
     amount: '',
     type: 'Expense',
     // Empty until chosen: there is no safe default for how a row is taxed.
     category: '',
-    date: new Date().toISOString().slice(0, 10),
+    date: defaultTransactionDate(taxYear),
     description: '',
-  });
+  }));
+
+  const [prevTaxYear, setPrevTaxYear] = useState(taxYear);
+  if (taxYear !== prevTaxYear) {
+    setPrevTaxYear(taxYear);
+    setFormData((prev) => ({
+      ...prev,
+      date: defaultTransactionDate(taxYear),
+    }));
+  }
 
   // Edit modal state
   const [editingTx, setEditingTx] = useState<TransactionItem | null>(null);
@@ -120,7 +129,7 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
         amount: '',
         type: 'Expense',
         category: '',
-        date: new Date().toISOString().slice(0, 10),
+        date: defaultTransactionDate(taxYear),
         description: '',
       });
       setFormStatus({ kind: 'ok', text: 'Transaction recorded successfully.' });

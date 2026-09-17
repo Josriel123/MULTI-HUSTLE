@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { Backpack, Home, LayoutDashboard, Printer, Receipt } from 'lucide-react';
 import { cn } from './cn';
 
@@ -15,15 +15,18 @@ const NAV_ITEMS = [
 
 export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const taxYear = searchParams.get('taxYear');
 
   return (
     <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 px-4">
       {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
         const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
+        const targetHref = taxYear ? `${href}?taxYear=${encodeURIComponent(taxYear)}` : href;
         return (
           <Link
             key={href}
-            href={href}
+            href={targetHref}
             onClick={onNavigate}
             aria-current={isActive ? 'page' : undefined}
             className={cn(

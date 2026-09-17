@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { Calendar, CheckCircle2, FileText, Printer, TrendingUp } from 'lucide-react';
+import { cn } from '@/components/cn';
 import { EstimateNotice } from '@/components/EstimateNotice';
 import { TaxYearSelect } from '@/components/TaxYearSelect';
+import { useTaxYear } from '@/components/useTaxYear';
 import {
   fetchSummary,
   fetchTransactions,
@@ -25,7 +27,7 @@ import { StatCard } from '@/components/ui/StatCard';
  * Zero local tax arithmetic: all figures are read directly from the engine summary.
  */
 export default function CPAExporter() {
-  const [taxYear, setTaxYear] = useState<number | undefined>(undefined);
+  const [taxYear, setTaxYear] = useTaxYear();
   const [summaryData, setSummaryData] = useState<SummaryResponse | null>(null);
   const [transactionData, setTransactionData] = useState<TransactionItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +105,10 @@ export default function CPAExporter() {
   const deliveryIncome = summaryData?.sources.delivery.income;
   const deliveryMiles = summaryData?.sources.delivery.mileage;
   const deliveryDeduction = summaryData?.sources.delivery.mileageDeduction;
+
+  const otherIncome = summaryData?.sources.other.income;
+  const otherDed = summaryData?.sources.other.deductions;
+  const hasOther = (otherIncome !== undefined && otherIncome > 0) || (otherDed !== undefined && otherDed > 0);
 
   const scholarTax = summaryData?.sources.scholarships.taxable;
   const scholarText = summaryData?.sources.scholarships.textbookSavings;
@@ -215,6 +221,7 @@ export default function CPAExporter() {
             disclaimer={summaryData?.disclaimer}
             warnings={summaryData?.warnings}
             assumptions={summaryData?.assumptions}
+            notModeled={summaryData?.notModeled}
           />
 
           {/* Part I: Schedule C */}
@@ -226,7 +233,7 @@ export default function CPAExporter() {
               </div>
             </CardHeader>
 
-            <div className="grid gap-6 md:grid-cols-2 md:gap-8">
+            <div className={cn('grid gap-6 md:gap-8', hasOther ? 'md:grid-cols-3' : 'md:grid-cols-2')}>
               {/* Freelance Column */}
               <div className="flex flex-col gap-3">
                 <h3 className="text-base font-semibold">Freelance &amp; Professional Services</h3>
@@ -256,6 +263,20 @@ export default function CPAExporter() {
                   tone="muted"
                 />
               </div>
+
+              {/* Other Business / Unassigned Column */}
+              {hasOther && (
+                <div className="flex flex-col gap-3">
+                  <h3 className="text-base font-semibold">Other Business &amp; Unassigned Gigs</h3>
+                  <DataRow label="Gross Receipts / Sales" hint="Schedule C line 1" value={formatCurrency(otherIncome)} />
+                  <DataRow
+                    label="Deductible Operating Expenses"
+                    hint="Schedule C Part II"
+                    value={`-${formatCurrency(otherDed)}`}
+                    tone="muted"
+                  />
+                </div>
+              )}
             </div>
           </Card>
 

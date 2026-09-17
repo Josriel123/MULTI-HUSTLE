@@ -10,6 +10,8 @@ export interface EstimateNoticeProps {
   warnings: TaxWarning[] | null | undefined;
   /** `assumptions` from the summary response, shown collapsed. */
   assumptions?: string[] | null;
+  /** `notModeled` from the summary response, shown collapsed. */
+  notModeled?: string[] | null;
   className?: string;
 }
 
@@ -23,7 +25,7 @@ export interface EstimateNoticeProps {
  * is nothing to say (no disclaimer and no warnings), which the API never
  * produces for a successful estimate.
  */
-export function EstimateNotice({ disclaimer, warnings, assumptions, className }: EstimateNoticeProps) {
+export function EstimateNotice({ disclaimer, warnings, assumptions, notModeled, className }: EstimateNoticeProps) {
   const list = warnings ?? [];
   if (!disclaimer && list.length === 0) return null;
 
@@ -67,6 +69,19 @@ export function EstimateNotice({ disclaimer, warnings, assumptions, className }:
           <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5 leading-relaxed">
             {assumptions.map((a, i) => (
               <li key={i}>{a}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {notModeled && notModeled.length > 0 && (
+        <details className="mt-4 border-t border-border pt-3 text-sm text-fg-muted">
+          <summary className="cursor-pointer font-medium text-fg-muted hover:text-fg">
+            Tax items not modeled by this engine ({notModeled.length})
+          </summary>
+          <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5 leading-relaxed">
+            {notModeled.map((item, i) => (
+              <li key={i}>{item}</li>
             ))}
           </ul>
         </details>

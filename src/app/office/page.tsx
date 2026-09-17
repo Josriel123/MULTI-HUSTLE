@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Home, Info, Save } from 'lucide-react';
 import { EstimateNotice } from '@/components/EstimateNotice';
 import { TaxYearSelect } from '@/components/TaxYearSelect';
+import { useTaxYear } from '@/components/useTaxYear';
 import { fetchHomeOfficeForm, fetchSummary, saveHomeOfficeForm, type SummaryResponse } from '@/components/api';
 import { formatCurrency, formatPercent, homeOfficeMethodLabel } from '@/components/format';
 import { Button } from '@/components/ui/Button';
@@ -29,7 +30,7 @@ const EMPTY_FORM: FormState = { totalSqFt: '', officeSqFt: '', rentAmount: '', u
  * computed and cited. Nothing on this page multiplies anything.
  */
 export default function HomeOfficePage() {
-  const [taxYear, setTaxYear] = useState<number | undefined>(undefined);
+  const [taxYear, setTaxYear] = useTaxYear();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [saving, setSaving] = useState(false);
@@ -188,7 +189,12 @@ export default function HomeOfficePage() {
           </Card>
         </div>
 
-        <EstimateNotice disclaimer={summary?.disclaimer} warnings={summary?.warnings} assumptions={summary?.assumptions} />
+        <EstimateNotice
+          disclaimer={summary?.disclaimer}
+          warnings={summary?.warnings}
+          assumptions={summary?.assumptions}
+          notModeled={summary?.notModeled}
+        />
 
         <Card padding="lg" className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-bg" aria-hidden>

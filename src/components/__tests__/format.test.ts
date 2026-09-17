@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { categoryLabel, filingStatusLabel, formatCurrency, formatDate, formatMiles, formatPercent, homeOfficeMethodLabel, humanizeSlug } from '../format';
+import { describe, expect, it, vi } from 'vitest';
+import { categoryLabel, defaultTransactionDate, filingStatusLabel, formatCurrency, formatDate, formatMiles, formatPercent, homeOfficeMethodLabel, humanizeSlug } from '../format';
 
 describe('formatCurrency', () => {
   it('formats numbers and the decimal strings the API sends', () => {
@@ -27,6 +27,28 @@ describe('other formatters', () => {
     expect(formatPercent(0.17647)).toBe('17.6%');
     expect(formatDate('2026-04-18T04:20:11.479Z')).toBe('Apr 18, 2026');
     expect(formatDate(null)).toBe('—');
+  });
+});
+
+describe('defaultTransactionDate', () => {
+  it('defaults to today when taxYear matches current calendar year or is omitted', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-15T12:00:00Z'));
+
+    expect(defaultTransactionDate(2026)).toBe('2026-07-15');
+    expect(defaultTransactionDate(undefined)).toBe('2026-07-15');
+
+    vi.useRealTimers();
+  });
+
+  it('defaults to the start of the selected tax year when not the current calendar year', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-15T12:00:00Z'));
+
+    expect(defaultTransactionDate(2025)).toBe('2025-01-01');
+    expect(defaultTransactionDate(2027)).toBe('2027-01-01');
+
+    vi.useRealTimers();
   });
 });
 

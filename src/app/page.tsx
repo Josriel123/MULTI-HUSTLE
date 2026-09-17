@@ -6,6 +6,7 @@ import { AlertCircle, ArrowRight, BrainCircuit, Car, CheckCircle2, Layers, X, Za
 import PlaidLinkButton from '@/components/PlaidLinkButton';
 import { EstimateNotice } from '@/components/EstimateNotice';
 import { TaxYearSelect } from '@/components/TaxYearSelect';
+import { useTaxYear } from '@/components/useTaxYear';
 import { fetchChart, fetchSummary, type ChartPoint, type SummaryResponse } from '@/components/api';
 import { filingStatusLabel, formatCurrency, formatMiles } from '@/components/format';
 import { Button, LinkButton } from '@/components/ui/Button';
@@ -23,7 +24,7 @@ import { StatCard } from '@/components/ui/StatCard';
  */
 export default function Dashboard() {
   // `undefined` means "let the server pick the current year"; the response tells us which it chose.
-  const [taxYear, setTaxYear] = useState<number | undefined>(undefined);
+  const [taxYear, setTaxYear] = useTaxYear();
   const [data, setData] = useState<SummaryResponse | null>(null);
   const [chart, setChart] = useState<ChartPoint[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -129,7 +130,7 @@ export default function Dashboard() {
               tone="danger"
             />
           </div>
-          <EstimateNotice disclaimer={data?.disclaimer} warnings={data?.warnings} assumptions={data?.assumptions} />
+          <EstimateNotice disclaimer={data?.disclaimer} warnings={data?.warnings} assumptions={data?.assumptions} notModeled={data?.notModeled} />
         </section>
 
         <Card className="animate-slide-up">
@@ -167,37 +168,42 @@ export default function Dashboard() {
           </div>
         </Card>
 
-        <section aria-label="Income by source" className="grid gap-4 md:grid-cols-2 md:gap-6 animate-slide-up">
-          <SourceCard
-            title="Freelance income"
-            icon={Zap}
-            amount={formatCurrency(data?.sources.freelance.income)}
-            details={[
-              ['Deductible expenses', formatCurrency(data?.sources.freelance.deductions)],
-              ['Home office deduction', formatCurrency(data?.sources.freelance.homeOfficeDeduction)],
-            ]}
-            action={{ href: '/deductions', label: 'Log an expense' }}
-          />
-          <SourceCard
-            title="Delivery income"
-            icon={Car}
-            amount={formatCurrency(data?.sources.delivery.income)}
-            details={[
-              ['Miles logged', formatMiles(data?.sources.delivery.mileage)],
-              ['Standard mileage deduction', formatCurrency(data?.sources.delivery.mileageDeduction)],
-            ]}
-            action={{ href: '/deductions', label: 'Log mileage' }}
-          />
-          {data && data.sources.other.income > 0 && (
-            <SourceCard
-              title="Other income"
-              icon={Layers}
-              amount={formatCurrency(data.sources.other.income)}
-              details={[['Deductible expenses', formatCurrency(data.sources.other.deductions)]]}
-              action={{ href: '/deductions', label: 'Review transactions' }}
-            />
-          )}
-        </section>
+        {(() => {
+          const deductionsHref = taxYear ? `/deductions?taxYear=${taxYear}` : '/deductions';
+          return (
+            <section aria-label="Income by source" className="grid gap-4 md:grid-cols-2 md:gap-6 animate-slide-up">
+              <SourceCard
+                title="Freelance income"
+                icon={Zap}
+                amount={formatCurrency(data?.sources.freelance.income)}
+                details={[
+                  ['Deductible expenses', formatCurrency(data?.sources.freelance.deductions)],
+                  ['Home office deduction', formatCurrency(data?.sources.freelance.homeOfficeDeduction)],
+                ]}
+                action={{ href: deductionsHref, label: 'Log an expense' }}
+              />
+              <SourceCard
+                title="Delivery income"
+                icon={Car}
+                amount={formatCurrency(data?.sources.delivery.income)}
+                details={[
+                  ['Miles logged', formatMiles(data?.sources.delivery.mileage)],
+                  ['Standard mileage deduction', formatCurrency(data?.sources.delivery.mileageDeduction)],
+                ]}
+                action={{ href: deductionsHref, label: 'Log mileage' }}
+              />
+              {data && data.sources.other.income > 0 && (
+                <SourceCard
+                  title="Other income"
+                  icon={Layers}
+                  amount={formatCurrency(data.sources.other.income)}
+                  details={[['Deductible expenses', formatCurrency(data.sources.other.deductions)]]}
+                  action={{ href: deductionsHref, label: 'Review transactions' }}
+                />
+              )}
+            </section>
+          );
+        })()}
       </Busy>
     </div>
   );

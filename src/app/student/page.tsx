@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { BookOpen, Info, Save } from 'lucide-react';
 import { EstimateNotice } from '@/components/EstimateNotice';
 import { TaxYearSelect } from '@/components/TaxYearSelect';
+import { useTaxYear } from '@/components/useTaxYear';
 import {
   fetchForm1098E,
   fetchForm1098T,
@@ -29,7 +30,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
  * Zero local tax arithmetic is performed in this component.
  */
 export default function StudentPage() {
-  const [taxYear, setTaxYear] = useState<number | undefined>(undefined);
+  const [taxYear, setTaxYear] = useTaxYear();
   const [box1, setBox1] = useState('');
   const [box5, setBox5] = useState('');
   const [box1E, setBox1E] = useState('');
@@ -335,7 +336,12 @@ export default function StudentPage() {
         </div>
 
         {/* Mandatory EstimateNotice */}
-        <EstimateNotice disclaimer={summary?.disclaimer} warnings={summary?.warnings} assumptions={summary?.assumptions} />
+        <EstimateNotice
+          disclaimer={summary?.disclaimer}
+          warnings={summary?.warnings}
+          assumptions={summary?.assumptions}
+          notModeled={summary?.notModeled}
+        />
 
         {/* Educational Context */}
         <Card padding="lg" className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">

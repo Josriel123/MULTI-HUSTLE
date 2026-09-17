@@ -7,7 +7,7 @@ import {
   deleteMileage,
   type MileageLogItem,
 } from './api';
-import { formatCurrency, formatDate, formatMiles } from './format';
+import { defaultTransactionDate, formatCurrency, formatDate, formatMiles } from './format';
 import { Button } from './ui/Button';
 import { Card, CardDescription, CardHeader, CardTitle } from './ui/Card';
 import { Field, FieldGrid, Input } from './ui/Field';
@@ -18,6 +18,7 @@ export interface MileageSectionProps {
   logs: MileageLogItem[];
   totalMiles: string;
   totalDeduction: string;
+  taxYear?: number;
   onRefresh: () => Promise<void>;
 }
 
@@ -25,15 +26,25 @@ export function MileageSection({
   logs,
   totalMiles,
   totalDeduction,
+  taxYear,
   onRefresh,
 }: MileageSectionProps) {
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
-  const [formData, setFormData] = useState({
-    date: new Date().toISOString().slice(0, 10),
+  const [formData, setFormData] = useState(() => ({
+    date: defaultTransactionDate(taxYear),
     miles: '',
     purpose: '',
-  });
+  }));
+
+  const [prevTaxYear, setPrevTaxYear] = useState(taxYear);
+  if (taxYear !== prevTaxYear) {
+    setPrevTaxYear(taxYear);
+    setFormData((prev) => ({
+      ...prev,
+      date: defaultTransactionDate(taxYear),
+    }));
+  }
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
@@ -47,7 +58,7 @@ export function MileageSection({
         purpose: formData.purpose || undefined,
       });
       setFormData({
-        date: new Date().toISOString().slice(0, 10),
+        date: defaultTransactionDate(taxYear),
         miles: '',
         purpose: '',
       });
