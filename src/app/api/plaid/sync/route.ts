@@ -73,6 +73,8 @@ export async function POST() {
     }
 
     let upserted = 0;
+    /** Pre-plaidTransactionId rows reclaimed rather than duplicated. */
+    let adopted = 0;
 
     for (const txn of [...added, ...modified]) {
       // Plaid sign convention: negative amount means money INTO the account.
@@ -94,10 +96,51 @@ export async function POST() {
       // Without this the old code re-inserted every row on every sync.
       // `taxDeductible` is deliberately only set on create: it's a user
       // decision, and re-syncing must not silently undo it.
-      await prisma.transaction.upsert({
+      const claimed = await prisma.transaction.findUnique({
         where: { plaidTransactionId: txn.transaction_id },
-        update: fields,
-        create: {
+        select: { id: true },
+      });
+
+      if (claimed) {
+        await prisma.transaction.update({ where: { id: claimed.id }, data: fields });
+        upserted++;
+        continue;
+      }
+
+      // Rows imported before plaidTransactionId existed carry no id to match
+      // on. Re-linking a bank resets the cursor, Plaid replays its history,
+      // and every one of those rows would otherwise be inserted a second
+      // time. Adopt the existing row instead of creating a duplicate.
+      //
+      // The natural key is deliberately strict — same owner, date, signed
+      // amount and description. A manual row that matches a bank row on all
+      // four is a duplicate of it in every sense that matters here, so
+      // adopting it is the right outcome rather than a risk.
+      const adoptable = await prisma.transaction.findFirst({
+        where: {
+          userId,
+          plaidTransactionId: null,
+          date: fields.date,
+          amount: fields.amount,
+          type: fields.type,
+          description: fields.description,
+        },
+        select: { id: true },
+      });
+
+      if (adoptable) {
+        await prisma.transaction.update({
+          where: { id: adoptable.id },
+          // Keeps whatever category the user had already applied to it.
+          data: { ...fields, plaidTransactionId: txn.transaction_id },
+        });
+        adopted++;
+        upserted++;
+        continue;
+      }
+
+      await prisma.transaction.create({
+        data: {
           ...fields,
           plaidTransactionId: txn.transaction_id,
           // Defaults to false. The previous heuristic marked anything in
@@ -132,6 +175,7 @@ export async function POST() {
       success: true,
       count: upserted,
       removed: removed.length,
+      adopted,
     });
   } catch (error) {
     console.error('Error syncing Plaid transactions:', describePlaidError(error));
