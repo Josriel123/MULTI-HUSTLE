@@ -95,8 +95,16 @@ export interface BuildInputArgs {
 export interface SourceBucket {
   /** Deposits counted as income (business or other taxable). */
   income: Money;
-  /** Expenses entered under a Schedule C category, before any limit. */
+  /**
+   * Expenses entered under a Schedule C category. A display figure: the 50%
+   * meals limit and the de minimis equipment cap are applied by the engine
+   * per category, not per source, so this is "entered", not "allowed".
+   * `estimateFromRows` does remove `vehicleExpenses` from it when the engine
+   * applied the standard mileage rate instead of actual vehicle costs.
+   */
   deductibleExpenses: Money;
+  /** Amounts entered under `car_and_truck`, so the figure above can be corrected after the engine's method choice. */
+  vehicleExpenses: Money;
 }
 
 export interface ExcludedIncome {
@@ -126,7 +134,7 @@ export interface BuiltInput {
 }
 
 function emptyBucket(): SourceBucket {
-  return { income: ZERO, deductibleExpenses: ZERO };
+  return { income: ZERO, deductibleExpenses: ZERO, vehicleExpenses: ZERO };
 }
 
 /** Display grouping only. Uses the IncomeSource `type` column, never the name. */
@@ -191,7 +199,9 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
         if (row.category) {
           warnings.push({
             code: 'category_mismatch',
-            message: `An income transaction is tagged with the expense category ${JSON.stringify(row.category)}; it was treated as uncategorised.`,
+            message: isExpenseCategory(row.category)
+              ? `An income transaction is tagged with the expense category ${JSON.stringify(row.category)}; it was treated as uncategorised.`
+              : `An income transaction is tagged ${JSON.stringify(row.category)}, which is not a known income category; it was treated as uncategorised. Re-categorise it.`,
             amount: amount.toFixed(2),
           });
         }
@@ -230,7 +240,9 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
         if (row.category) {
           warnings.push({
             code: 'category_mismatch',
-            message: `An expense transaction is tagged with the income category ${JSON.stringify(row.category)}; it was treated as uncategorised (personal).`,
+            message: isIncomeCategory(row.category)
+              ? `An expense transaction is tagged with the income category ${JSON.stringify(row.category)}; it was treated as uncategorised (personal).`
+              : `An expense transaction is tagged ${JSON.stringify(row.category)}, which is not a known expense category; it was treated as uncategorised (personal). Re-categorise it.`,
             amount: amount.toFixed(2),
           });
         }
@@ -244,6 +256,7 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
       const treatment = EXPENSE_CATEGORIES[category].treatment;
       if (treatment === 'schedule_c_expense' || treatment === 'schedule_c_de_minimis_equipment') {
         bucket.deductibleExpenses = bucket.deductibleExpenses.plus(amount);
+        if (category === 'car_and_truck') bucket.vehicleExpenses = bucket.vehicleExpenses.plus(amount);
       }
     } else {
       warnings.push({ code: 'unknown_transaction_type', message: `Transaction type ${JSON.stringify(row.type)} is not Income or Expense and was ignored.`, amount: amount.toFixed(2) });

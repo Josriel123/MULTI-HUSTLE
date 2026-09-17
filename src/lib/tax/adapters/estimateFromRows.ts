@@ -24,5 +24,17 @@ export function estimateFromRows(args: BuildInputArgs): RowsEstimate {
   const built = buildFederalTaxInput(args);
   const estimate = estimateFederalTax(built.input);
   const safeToSpend = built.cashIncomeTotal.minus(built.cashExpensesTotal).minus(estimate.totalTax);
+
+  // The per-source display buckets count car_and_truck amounts as entered.
+  // When the engine applied the standard mileage rate instead (one method per
+  // vehicle, Pub. 463 ch. 4), those amounts were not deducted, so they come
+  // back out here; what the dashboard shows per source must not exceed what
+  // Schedule C took.
+  if (estimate.scheduleC.mileage.methodApplied === 'standard_mileage') {
+    for (const bucket of Object.values(built.bySource)) {
+      bucket.deductibleExpenses = bucket.deductibleExpenses.minus(bucket.vehicleExpenses);
+    }
+  }
+
   return { built, estimate, safeToSpend };
 }

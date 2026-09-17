@@ -46,7 +46,13 @@ function classification(t: TransactionItem): { tone: BadgeTone; label: string } 
     }
   }
   if (!t.category) return { tone: 'info', label: 'Uncategorised: not deducted' };
-  if (isDeductibleExpenseCategory(t.category)) return { tone: 'accent', label: 'Deductible' };
+  if (isDeductibleExpenseCategory(t.category)) {
+    // Actual vehicle costs and logged miles are one method per vehicle; the
+    // estimate applies the larger and warns. Say which method this row is.
+    return t.category === 'car_and_truck'
+      ? { tone: 'accent', label: 'Deductible: actual vehicle costs' }
+      : { tone: 'accent', label: 'Deductible' };
+  }
   const def = EXPENSE_CATEGORIES[t.category as keyof typeof EXPENSE_CATEGORIES];
   if (!def) return { tone: 'info', label: 'Unknown category' };
   switch (def.treatment) {
@@ -129,11 +135,15 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
   function openEditModal(tx: TransactionItem) {
     setEditingTx(tx);
     setEditError(null);
+    // A stored category outside the vocabulary (legacy rows accepted any
+    // string) cannot be re-saved, so the select starts empty and the user
+    // picks a real one; the old value is shown in the hint.
+    const vocabulary = tx.type === 'Income' ? INCOME_CATEGORY_SLUGS : EXPENSE_CATEGORY_SLUGS;
     setEditFormData({
       amount: tx.amount,
       date: tx.date ? new Date(tx.date).toISOString().slice(0, 10) : '',
       description: tx.description || '',
-      category: tx.category ?? '',
+      category: tx.category && vocabulary.includes(tx.category) ? tx.category : '',
     });
   }
 
@@ -536,7 +546,13 @@ export function TransactionLedger({ transactions, onRefresh }: TransactionLedger
               <Field
                 htmlFor="edit-category"
                 label="Tax Category"
-                hint={editingTx.type === 'Income' ? INCOME_CATEGORY_HINT : EXPENSE_CATEGORY_HINT}
+                hint={
+                  editingTx.category && !editCategorySlugs.includes(editingTx.category)
+                    ? `Stored as "${editingTx.category}", which is not a tax category the estimate understands. Choose one.`
+                    : editingTx.type === 'Income'
+                      ? INCOME_CATEGORY_HINT
+                      : EXPENSE_CATEGORY_HINT
+                }
               >
                 <Select
                   id="edit-category"

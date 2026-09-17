@@ -163,6 +163,25 @@ describe('the summary and chart routes share one estimate function', () => {
     expectMoney(estimate.scheduleC.mileage.deduction, '27.19');
   });
 
+  it('takes excluded actual vehicle costs back out of the per-source display bucket when standard mileage wins', () => {
+    const DELIVERY = { name: 'Delivery Gig Income', type: 'Delivery' };
+    const rows = (vehicleCosts: string): TransactionRow[] => [
+      { amount: '50000', type: 'Income', date: d('2026-02-01'), category: 'business_income', incomeSource: DELIVERY },
+      { amount: vehicleCosts, type: 'Expense', date: d('2026-03-01'), category: 'car_and_truck', incomeSource: DELIVERY },
+      { amount: '100', type: 'Expense', date: d('2026-03-02'), category: 'supplies', incomeSource: DELIVERY },
+    ];
+    const logs = [{ date: d('2026-09-10'), miles: '1000' }]; // 760.00 at 76c
+
+    const standardWins = estimateFromRows({ taxYear: 2026, transactions: rows('500'), mileageLogs: logs });
+    expect(standardWins.estimate.scheduleC.mileage.methodApplied).toBe('standard_mileage');
+    expectMoney(standardWins.built.bySource.delivery.vehicleExpenses, '500.00');
+    expectMoney(standardWins.built.bySource.delivery.deductibleExpenses, '100.00'); // supplies only; the 500 was not deducted
+
+    const actualWins = estimateFromRows({ taxYear: 2026, transactions: rows('2000'), mileageLogs: logs });
+    expect(actualWins.estimate.scheduleC.mileage.methodApplied).toBe('actual_expenses');
+    expectMoney(actualWins.built.bySource.delivery.deductibleExpenses, '2100.00');
+  });
+
   it('cites every standard mileage rate period actually used', () => {
     const INCOME: TransactionRow = { amount: '10000', type: 'Income', date: d('2026-02-01'), category: 'business_income', incomeSource: null };
     const labels = (logs: { date: Date; miles: string }[]) =>
