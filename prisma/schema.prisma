@@ -15,21 +15,30 @@ model User {
   id        String   @id @default(cuid())
   name      String
   email     String   @unique
-  plan      String   @default("Pro Plan")
   createdAt DateTime @default(now())
+
+  // The Terms of Service and Privacy Policy this user agreed to, and when
+  // (src/lib/legal.ts agreementVersion). Null until they tick both boxes in
+  // the app's agreement step; a new version asks again. The record is the
+  // evidence of a clickwrap agreement, so it is never back-filled.
+  agreementVersion    String?
+  agreementAcceptedAt DateTime?
+  // When they confirmed they are 18 or older. Null means not yet confirmed:
+  // the app shows nothing else until they do.
+  adultConfirmedAt    DateTime?
 
   // Federal filing status used by the tax estimate. One of the values in
   // src/lib/tax/types.ts FILING_STATUSES. Defaults to single until the user
   // says otherwise; the estimate reports which status it used.
-  filingStatus       String  @default("single")
+  filingStatus       String    @default("single")
   // Whether another taxpayer can claim this user as a dependent. Limits the
   // standard deduction (IRC §63(c)(5)) and bars the student loan interest
   // deduction (§221(c)).
-  claimedAsDependent Boolean @default(false)
+  claimedAsDependent Boolean   @default(false)
   // Married filing separately only: the spouse itemizes, so this taxpayer may
   // not take the standard deduction (IRC §63(c)(6)(A)). Read by the engine;
   // ignored for every other filing status.
-  spouseItemizes     Boolean @default(false)
+  spouseItemizes     Boolean   @default(false)
   // When the user last saved the three fields above on the Tax profile page.
   // Null means never: filingStatus then holds the column default, not a
   // choice, and the estimate says it assumed single.

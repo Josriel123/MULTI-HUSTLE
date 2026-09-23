@@ -12,6 +12,8 @@ export interface EstimateNoticeProps {
   assumptions?: readonly string[] | null;
   /** `notModeled` from the summary response, shown collapsed. */
   notModeled?: readonly string[] | null;
+  /** `rules` from the summary response: the IRS source of the year's figures. */
+  rules?: { taxYear: number; source: string; url: string | null } | null;
   className?: string;
 }
 
@@ -25,7 +27,7 @@ export interface EstimateNoticeProps {
  * disclaimer and no warnings), which the API never produces for a successful
  * estimate.
  */
-export function EstimateNotice({ disclaimer, warnings, assumptions, notModeled, className }: EstimateNoticeProps) {
+export function EstimateNotice({ disclaimer, warnings, assumptions, notModeled, rules, className }: EstimateNoticeProps) {
   const list = warnings ?? [];
   if (!disclaimer && list.length === 0) return null;
 
@@ -49,6 +51,20 @@ export function EstimateNotice({ disclaimer, warnings, assumptions, notModeled, 
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-fg">About this estimate</h2>
             <p className="mt-0.5 text-sm leading-relaxed text-fg-muted">{disclaimer}</p>
+            {rules && (
+              <p className="mt-1.5 text-sm text-fg-muted">
+                Uses the IRS&rsquo;s figures for tax year {rules.taxYear} (
+                {rules.url ? (
+                  <a href={rules.url} target="_blank" rel="noopener noreferrer" className="font-medium text-accent underline underline-offset-2 hover:no-underline">
+                    {rules.source}
+                    <span className="sr-only"> (opens in a new tab)</span>
+                  </a>
+                ) : (
+                  rules.source
+                )}
+                ).
+              </p>
+            )}
           </div>
         </div>
       )}

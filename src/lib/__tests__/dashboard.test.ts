@@ -24,6 +24,11 @@ const rows: EstimateInputRows = {
 describe('summaryPayload', () => {
   const payload = summaryPayload(rows);
 
+  it("names the IRS source of the year's figures, as the Terms of Service promise every estimate does", () => {
+    expect(payload.rules).toEqual({ taxYear: 2025, source: 'Rev. Proc. 2024-40', url: expect.stringMatching(/^https:\/\/www\.irs\.gov\//) });
+    expect(summaryPayload({ ...rows, taxYear: 2026 }).rules.source).toBe('Rev. Proc. 2025-32');
+  });
+
   it('reports what is owed, what is paid and what is left, straight from the engine', () => {
     const e = payload.estimate;
     expect(payload.summary.taxLiability).toBe(e.totalTax);

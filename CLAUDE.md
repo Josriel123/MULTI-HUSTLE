@@ -12,9 +12,17 @@ notes are specific to working here as Claude Code.
   yourself.
 - **You can't see signed-in pages with real data.** The preview pane's Clerk
   session doesn't last, and you must not sign in. Check layout and behaviour
-  at `/preview/<page>` (sample data through the real engine, D36), verify
+  at `/preview/<page>` (sample data through the real engine, D36; the app
+  frame without the agreement step, which is at `/preview/agreement`), verify
   real data through read-only API and database checks, say plainly what was
   not seen, and ask the owner for a click-through.
+- **A hidden browser pane pauses rendering.** While Claude's window is behind
+  another, screenshots time out and animations, transitions and
+  `requestAnimationFrame` stop, so measured positions (the tour's spotlight),
+  `getBoundingClientRect` during a transition, Recharts' first size and
+  React's streamed Suspense reveals all look wrong. Read inline styles or
+  intended values instead, and retake anything visual once a screenshot
+  succeeds.
 - **`.claude/launch.json` attaches** to the owner's `npm run dev` on port 3000.
   It never starts a second server — two would fight over `.next`. That server
   keeps the Prisma client it started with: after a schema change it needs a

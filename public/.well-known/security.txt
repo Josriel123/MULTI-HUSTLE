@@ -1,0 +1,5 @@
+# Security contact for Multi-Hustle (RFC 9116).
+# Please report vulnerabilities privately to the address below.
+Contact: mailto:joelbueno09@hotmail.com
+Expires: 2027-09-23T00:00:00.000Z
+Preferred-Languages: en

@@ -49,7 +49,8 @@ export function SegmentedControl<T extends string>({
               'relative flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg font-medium transition-colors',
               size === 'sm' ? 'h-8 px-2 text-sm sm:px-3' : 'h-10 px-3 text-sm sm:px-4',
               fullWidth && 'flex-1',
-              checked ? 'bg-card text-fg shadow-card' : 'text-fg-muted hover:text-fg',
+              // The chosen one is outlined, not only lighter: white on the grey track alone is too faint to see (WCAG 1.4.11).
+              checked ? 'bg-card text-fg shadow-card ring-1 ring-field-border' : 'text-fg-muted hover:text-fg',
               'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent',
             )}
           >

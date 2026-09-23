@@ -229,3 +229,71 @@ describe('migration 20260923000000_w2_payments_profile', () => {
     expect(res.rows.map((r) => r.indexname)).toEqual(['EstimatedTaxPayment_userId_taxYear_idx', 'W2Form_userId_taxYear_idx']);
   });
 });
+
+/**
+ * The consent migration adds three nullable columns and nothing else. A
+ * consent record must never be invented, so existing users come through with
+ * all three null (the app then asks them once); nothing else on the row
+ * changes. It must stay additive: it is applied while the previous release is
+ * still serving, and that release selects every column it knows, `plan`
+ * included.
+ */
+describe('migration 20260924000000_consent_record', () => {
+  const NEW = '20260924000000_consent_record';
+  let db: PGlite;
+
+  beforeAll(async () => {
+    db = new PGlite();
+    const dirs = migrationDirs();
+    expect(dirs).toContain(NEW);
+    for (const dir of dirs) {
+      if (dir === NEW) break;
+      await db.exec(sqlOf(dir));
+    }
+    await db.exec(`
+      INSERT INTO "User" (id, name, email, "filingStatus", "taxProfileSavedAt") VALUES
+        ('user_1', 'Ana', 'ana@example.com', 'head_of_household', '2026-09-20'),
+        ('user_2', 'Ben', 'ben@example.com', 'single', NULL);
+    `);
+    await db.exec(sqlOf(NEW));
+  }, 60_000);
+
+  afterAll(async () => {
+    await db?.close();
+  });
+
+  it('only adds columns: every column the running release selects is still there', async () => {
+    const res = await db.query<{ column_name: string; is_nullable: string }>(
+      `SELECT column_name, is_nullable FROM information_schema.columns WHERE table_name = 'User' ORDER BY column_name`,
+    );
+    const names = res.rows.map((r) => r.column_name);
+    for (const kept of ['id', 'name', 'email', 'plan', 'createdAt', 'filingStatus', 'claimedAsDependent', 'spouseItemizes', 'taxProfileSavedAt']) {
+      expect(names, kept).toContain(kept);
+    }
+    const added = res.rows.filter((r) => ['agreementVersion', 'agreementAcceptedAt', 'adultConfirmedAt'].includes(r.column_name));
+    expect(added.map((r) => r.is_nullable)).toEqual(['YES', 'YES', 'YES']);
+  });
+
+  it('still lets the new code create a user without naming plan (its default fills it)', async () => {
+    await db.exec(`INSERT INTO "User" (id, name, email) VALUES ('user_3', 'Cy', 'cy@example.com')`);
+    const res = await db.query<{ plan: string }>(`SELECT plan FROM "User" WHERE id = 'user_3'`);
+    expect(res.rows).toEqual([{ plan: 'Pro Plan' }]);
+    await db.exec(`DELETE FROM "User" WHERE id = 'user_3'`);
+  });
+
+  it('leaves every consent field null on existing users: nobody is recorded as having agreed', async () => {
+    const res = await db.query<Record<string, unknown>>('SELECT id, "agreementVersion", "agreementAcceptedAt", "adultConfirmedAt" FROM "User" ORDER BY id');
+    expect(res.rows).toEqual([
+      { id: 'user_1', agreementVersion: null, agreementAcceptedAt: null, adultConfirmedAt: null },
+      { id: 'user_2', agreementVersion: null, agreementAcceptedAt: null, adultConfirmedAt: null },
+    ]);
+  });
+
+  it('keeps the rest of each row as it was', async () => {
+    const res = await db.query<Record<string, unknown>>('SELECT id, name, email, "filingStatus" FROM "User" ORDER BY id');
+    expect(res.rows).toEqual([
+      { id: 'user_1', name: 'Ana', email: 'ana@example.com', filingStatus: 'head_of_household' },
+      { id: 'user_2', name: 'Ben', email: 'ben@example.com', filingStatus: 'single' },
+    ]);
+  });
+});

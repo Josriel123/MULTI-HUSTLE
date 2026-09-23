@@ -12,7 +12,7 @@ Portfolio project, built to product standards wherever that costs nothing extra.
 
 **In scope:** correct tax engine with tests and IRS citations, `Decimal` money, encrypted Plaid tokens at rest, a visible "estimate, not tax advice" disclaimer, real error handling.
 
-**Out of scope:** Plaid production access, audit logging, GDPR/CCPA flows, SOC2 posture. Plaid stays in **sandbox**.
+**Out of scope:** Plaid production access, audit logging, SOC2 posture. Plaid stays in **sandbox**. (GDPR/CCPA-style flows were out of scope until 2026-09-23; the privacy and consent layer is now built, [D50](docs/decision-log.md#d50).)
 
 The app tells people what they may owe the IRS. Invented numbers are the main risk in this codebase — not code style. Any tax calculation must cite the rule it implements and have a test with a known answer.
 
@@ -145,11 +145,26 @@ Done in the redesign (2026-09-23, branch `ui-redesign`, D28–D38):
 - Plaid sync no longer creates a hustle per deposit description or resets the user's choice (D31).
 - `dev.db` and `prisma/dev.db` are untracked (commit `c1ae8d2`).
 
+Done in the policies, onboarding and phone change (2026-09-23, branch `legal-onboarding-mobile`, D39–D50):
+- **Public pages outside sign-in**: a welcome page, About with the operator's details, and every policy under `/legal` (privacy, terms, cookies, refunds, delete or download your data, accessibility, licenses), linked from every footer; the app's own sign-in and sign-up pages. Signed-out visitors to `/` land on the welcome page.
+- **A recorded agreement and an 18+ check** before the app opens, versioned and stamped by the server; a new version asks again; "I'm under 18" leads to deleting the account.
+- **Data rights as buttons**: download everything as JSON, delete the account (every table, bank access revoked at Plaid, then the Clerk user), and "Disconnect" on the bank card. The Plaid consent line sits under "Connect a bank", and Link now shows the app's real name.
+- **An informational cookie notice** (only essential storage, so no fake choice), security headers, `security.txt`, a written security program (`docs/security-program.md`), a legal changelog and `THIRD_PARTY_NOTICES.md`.
+- **A guided tour** of every tab on the first visit, skippable and replayable, keyboard-driven, tested against the nav.
+- **Phone**: bottom tab bar with quick add, slide-out menu, installable (manifest and icons), and the income chart no longer pushes a 375px screen sideways.
+- **Accessibility**: contrast tested on the tokens (light faint, warning and danger darkened; text boxes outlined at 3:1), skip link, focus management, a text table behind the chart, a title on every page.
+- Every estimate names the IRS figures it uses; claims on the welcome page were checked against the code; `User.plan` ("Pro Plan", for a plan that does not exist) is no longer read.
+
 Still open (2026-09-23):
-- **Migration `20260923000000_w2_payments_profile` is committed, not applied.** Before running the new code against Neon: `npx prisma migrate deploy`, then `npx prisma generate` with the dev server stopped, then restart it. Until then every page that loads the estimate fails, because the new tables do not exist.
-- **Not deployed.** Nothing has been pushed since April: `origin/master` still holds the pre-rebuild app. Shipping needs a Clerk production instance, a Neon production branch, the Clerk webhook secret, and hosting — the owner's call.
-- **No signed-in click-through of the redesign.** It was checked with sample data at `/preview`; nobody has used it on a real account yet.
+- **Apply migration `20260924000000_consent_record` before this branch is deployed.** `npx prisma migrate deploy`; then stop the dev server, `npx prisma generate`, restart. It only adds columns, so the release that is live keeps working after it; the new code fails on every page without it (the agreement step cannot read the account). Before-counts are in `prisma/migrations/README.md`.
+- **Then, once the new release is live, drop `User.plan`** in its own migration (SQL in `prisma/migrations/README.md`, D47).
+- **This branch is not pushed.** `origin/master` holds the redesign (pushed 2026-09-23); `legal-onboarding-mobile` waits for the migration above, then the owner pushes it.
+- **Shipping to real users** still needs a Clerk production instance (the app runs on Clerk development keys), a Neon production branch, the Clerk webhook secret, and hosting: the owner's call.
+- **Operator details the owner must fill in** (`src/lib/legal.ts`): `governingState` (the Terms fall back to "the state where the operator lives"), a postal address if one should be published (About says "on request"), and ideally a dedicated contact address instead of a personal mailbox. Changing any of them that users agreed to: bump `agreementVersion` and add a line to `docs/legal-changelog.md`.
+- **The policies were written from the code, by no lawyer.** Have one review them before growth, and before Plaid production.
+- **Owner safeguards** in `docs/security-program.md` §4: two-step sign-in on GitHub, Vercel, Neon, Clerk, Plaid and the mailbox; Neon history window at or below 30 days.
+- **A full Content Security Policy** is deferred (D45): start one in report-only mode with Clerk's and Plaid's documented domains.
+- **No signed-in click-through yet** of the agreement step, Account & privacy (download; delete on a throwaway account), "Disconnect" (on a fresh test user, never the populated sandbox account, D23), the tour on a real phone, and adding the app to a home screen. The redesign itself also still needs one.
 - **Hustles made by the old sync** (one per deposit description, such as "Uber 063015 SF**POOL**") are still on the populated account. Tidy them under Income & expenses → Hustles: renaming one to another's name merges the two.
 - **Re-link adoption has not run live.** The matching was verified read-only against the 15 real legacy rows (15 of 15); a same-item replay on a test account would test the rest. Never re-link the populated sandbox account (D23).
 - **An orphaned demo user** (cuid id, 4 transactions) from the pre-rebuild seed script is invisible to the app and safe to delete.
-- **Legal documents** (terms of use, privacy notice) are next, per the owner.

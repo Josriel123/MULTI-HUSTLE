@@ -11,6 +11,7 @@ import {
   Home,
   Landmark,
   LayoutDashboard,
+  ShieldCheck,
   UserRound,
   type LucideIcon,
 } from 'lucide-react';
@@ -47,9 +48,13 @@ export const NAV_GROUPS: { heading?: string; items: NavItem[] }[] = [
   },
   {
     heading: 'Your estimate',
+    items: [{ href: '/report', label: 'Tax report', icon: FileText }],
+  },
+  {
+    heading: 'Settings',
     items: [
-      { href: '/report', label: 'Tax report', icon: FileText },
       { href: '/profile', label: 'Tax profile', icon: UserRound },
+      { href: '/account', label: 'Account & privacy', icon: ShieldCheck },
     ],
   },
 ];
@@ -73,6 +78,7 @@ export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) 
               <Link
                 key={href}
                 href={targetHref}
+                data-tour={`nav-${href}`}
                 onClick={onNavigate}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(

@@ -433,6 +433,50 @@ export async function deleteHustle(id: string): Promise<{ success: boolean; unas
   return readJson(await fetch(`/api/sources/${id}`, { method: 'DELETE' }));
 }
 
+// --- Account: the agreement, export and deletion ---------------------------
+
+export interface AgreementStatus {
+  currentVersion: string;
+  acceptedVersion: string | null;
+  acceptedAt: string | null;
+  adultConfirmedAt: string | null;
+  needsAgreement: boolean;
+}
+
+/** GET /api/account */
+export async function fetchAccount(): Promise<{ agreement: AgreementStatus }> {
+  return readJson(await fetch('/api/account', { cache: 'no-store' }));
+}
+
+/** POST /api/account/agreement. Both flags must be the user's own ticks. */
+export async function acceptAgreement(input: { agreementVersion: string; agree: boolean; adult: boolean }): Promise<{ agreement: AgreementStatus }> {
+  return readJson(await fetch('/api/account/agreement', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(input) }));
+}
+
+/** DELETE /api/account: erases every row and the sign-in account. */
+export async function deleteAccount(): Promise<{ deleted: true; bankConnectionsRevoked: number; bankRevocationErrors: number }> {
+  return readJson(await fetch('/api/account', { method: 'DELETE' }));
+}
+
+/** GET /api/account/export, saved as a file. */
+export async function downloadAccountData(): Promise<void> {
+  const res = await fetch('/api/account/export', { cache: 'no-store' });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new ApiError(body?.error ?? `Request failed (${res.status})`, res.status);
+  }
+  const blob = await res.blob();
+  const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? 'multi-hustle-data.json';
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 /**
  * Message for a rejected request, for pages that load several independently.
  *

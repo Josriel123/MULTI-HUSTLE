@@ -28,18 +28,23 @@
 
   --c-fg: #0f172a;
   --c-fg-muted: #475569;
-  --c-fg-faint: #64748b;
+  --c-fg-faint: #5e6d83;
 
   --c-accent: #047857;
   --c-on-accent: #ffffff;
-  --c-danger: #c2410c;
-  --c-warning: #b45309;
+  --c-danger: #b23c0b;
+  --c-warning: #a24b08;
   --c-info: #0369a1;
   --c-on-info: #ffffff;
 
   --c-border: #e2e8f0;
   --c-border-strong: #cbd5e1;
+  /* The outline of a text box or a chosen option: 3:1 against what is around
+     it (WCAG 1.4.11). The border tokens above are for decoration only. */
+  --c-field-border: #7d8ba0;
   --c-scrim: rgba(15, 23, 42, 0.5);
+  /* The guided tour dims everything but the tab it points at. */
+  --c-tour-dim: rgba(15, 23, 42, 0.62);
 
   --c-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
   --c-shadow-pop: 0 10px 30px -10px rgba(15, 23, 42, 0.25), 0 4px 10px -4px rgba(15, 23, 42, 0.1);
@@ -67,7 +72,9 @@
 
     --c-border: #2a2a2e;
     --c-border-strong: #3a3a3f;
+    --c-field-border: #6b6b74;
     --c-scrim: rgba(0, 0, 0, 0.7);
+    --c-tour-dim: rgba(0, 0, 0, 0.72);
 
     --c-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
     --c-shadow-pop: 0 12px 32px -8px rgba(0, 0, 0, 0.7);
@@ -99,6 +106,7 @@
   /* Lines */
   --color-border: var(--c-border);
   --color-border-strong: var(--c-border-strong);
+  --color-field-border: var(--c-field-border);
   /* Behind dialogs and the phone drawer. */
   --color-scrim: var(--c-scrim);
 
@@ -184,6 +192,14 @@
       animation-duration: 0.01ms !important;
       transition-duration: 0.01ms !important;
     }
+  }
+}
+
+/* While the phone's bottom tab bar shows, floating things (the cookie
+   notice) sit above it: they add var(--mh-bottom-nav) to their offset. */
+@media (max-width: 1023.98px) {
+  body:has([data-bottom-nav]) {
+    --mh-bottom-nav: 4.5rem;
   }
 }
 

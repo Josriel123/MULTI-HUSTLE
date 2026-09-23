@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { plaidEnv } from '@/lib/plaid';
 
 /**
  * Whether this user has a linked bank.
@@ -24,6 +25,8 @@ export async function GET() {
       linked: connection !== null,
       linkedAt: connection?.createdAt ?? null,
       hasSynced: Boolean(connection?.cursor),
+      /** 'sandbox' means Plaid's test bank, which the bank card says. */
+      environment: plaidEnv,
     });
   } catch (error) {
     console.error('Failed to read Plaid connection status:', error);

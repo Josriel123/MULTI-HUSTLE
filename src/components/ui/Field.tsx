@@ -24,7 +24,7 @@ export function Label({ className, children, ...rest }: LabelHTMLAttributes<HTML
 }
 
 export const CONTROL =
-  'h-11 w-full rounded-lg border border-border-strong/70 bg-card px-3 text-[0.95rem] text-fg placeholder:text-fg-faint ' +
+  'h-11 w-full rounded-lg border border-field-border bg-card px-3 text-[0.95rem] text-fg placeholder:text-fg-faint ' +
   'transition-[border-color,box-shadow] duration-150 focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/15 ' +
   'disabled:cursor-not-allowed disabled:bg-surface disabled:text-fg-muted aria-invalid:border-danger';
 

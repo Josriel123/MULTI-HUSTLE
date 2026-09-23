@@ -21,8 +21,9 @@ Schedule SE, the QBI deduction, the standard deduction, income tax) with the
 rule behind each line, and a tax report that prints for a preparer.
 
 > **This is an estimate for planning, not tax advice.** It covers federal
-> income and self-employment tax only, leaves out every tax credit (so it runs
-> high), and says on screen and on paper what else it does not model.
+> income and self-employment tax only, leaves out every tax credit (so it comes
+> out high for anyone who qualifies for one), and says on screen and on paper
+> what else it does not model.
 
 ## What's worth a look
 
@@ -60,7 +61,17 @@ through the real engine.
 **Honest about its limits.** When the engine cannot know a fact that would
 change the answer, it either assumes the conservative reading or makes the
 likely assumption and warns — and every figure on screen carries the
-disclaimer, the warnings and the assumptions that qualify it.
+disclaimer, the warnings, the assumptions, and the year's IRS source that
+qualify it.
+
+**Ready for strangers to sign up.** Public policies written from the code
+(privacy, terms, cookies, refunds, data deletion, accessibility, licenses), a
+recorded agreement and 18+ check before the app opens, download-everything and
+delete-everything buttons that also revoke bank access at Plaid, only
+essential cookies, security headers, and a written security program. A guided
+tour explains every tab on the first visit, and on a phone the app has bottom
+tabs, a quick-add button, and installs to the home screen. Contrast is tested
+on the colour tokens in both themes.
 
 Why things are built the way they are is recorded in the
 [decision log](docs/decision-log.md).
@@ -109,12 +120,15 @@ npx prisma migrate deploy
 npm run dev
 ```
 
-Open <http://localhost:3000> and sign up through Clerk. To link a bank, pick any
-institution in Plaid's sandbox and sign in with `user_good` / `pass_good`.
+Open <http://localhost:3000>: signed out, it shows the welcome page. Sign up,
+agree to the Terms and confirm you are 18 or older, and the guided tour starts.
+To link a bank, pick any institution in Plaid's sandbox and sign in with
+`user_good` / `pass_good`.
 
 Just looking? <http://localhost:3000/preview> renders every screen with sample
 data, no sign-in needed (development only; `?scenario=new` shows an empty
-account).
+account, `?tour=1` starts the tour, `/preview/agreement` is the step before
+the app).
 
 Optional demo data for your account — your Clerk user id starts with `user_`:
 
@@ -130,7 +144,7 @@ baseline as applied first — see [`prisma/migrations/README.md`](prisma/migrati
 | Command | Does |
 |---|---|
 | `npm run dev` | Development server on port 3000 |
-| `npm test` | The Vitest suite (360 tests) |
+| `npm test` | The Vitest suite |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
 | `npm run build` | Production build |
@@ -146,16 +160,26 @@ folder with OneDrive makes both more likely.
 
 ```
 src/
-├── app/                  Pages: overview, income & expenses, mileage, W-2 jobs,
-│   │                     tax payments, home office, education, tax report,
-│   │                     tax profile; preview/ is the dev-only sample-data view
-│   └── api/              Route handlers — each authenticates itself
+├── app/
+│   ├── (app)/            The signed-in app, behind the agreement step: overview,
+│   │                     income & expenses, mileage, W-2 jobs, tax payments, home
+│   │                     office, education, tax report, tax profile, account
+│   ├── (public)/         Welcome, About, the policies under /legal, sign-in, sign-up
+│   ├── (preview)/        The dev-only sample-data view of every app page
+│   ├── api/              Route handlers — each authenticates itself
+│   └── manifest.ts, icon.svg, robots.ts
 ├── components/           Shared UI; its README is the design-system spec
-│   └── ui/               Buttons, cards, fields, dialogs, the term popover, …
+│   ├── ui/               Buttons, cards, fields, dialogs, the term popover, …
+│   ├── legal/            Agreement step, cookie notice, public frame, footer
+│   └── tour/             The first-visit guided tour
 ├── lib/
 │   ├── tax/              The federal engine: pure functions, cited, tested
 │   ├── dashboard.ts      Builds the summary and chart responses from rows (pure)
 │   ├── estimateRows.ts   Loads one user's rows for one tax year
+│   ├── legal.ts          Operator details, policy versions, service providers
+│   ├── agreement.ts      Whether a user still has to agree, and what counts
+│   ├── userData.ts       Export and delete everything for one user
+│   ├── brand.ts          Brand colours as literals for the manifest and icons
 │   ├── glossary.ts       Plain-English definitions for the tax words on screen
 │   ├── hustles.ts        Hustle names, kinds, and matching deposits to them
 │   ├── taxYear.ts        How every route decides which year it is answering for
@@ -163,13 +187,17 @@ src/
 │   ├── formInput.ts      The same, for W-2s, payments and the tax profile
 │   ├── crypto.ts         AES-256-GCM for Plaid tokens at rest
 │   └── user.ts           Creates the user row on first write
-└── proxy.ts              Next.js 16 Proxy: sends signed-out page visits to sign-in
+└── proxy.ts              Next.js 16 Proxy: public pages through, the rest to sign-in
 prisma/
 ├── schema.prisma
 └── migrations/           Committed SQL, applied with `prisma migrate deploy`
 docs/
 ├── decision-log.md       Why the code is the way it is
+├── security-program.md   What is held, how it is protected, incidents, retention
+├── legal-changelog.md    Every version of the Terms and Privacy Policy
 └── audits/               The engine audit and two end-to-end passes, each triaged
+public/.well-known/security.txt   The security contact
+THIRD_PARTY_NOTICES.md    Licences of the packages the app is built on
 ```
 
 ## Known limitations
@@ -179,12 +207,15 @@ docs/
   does not.
 - **No tax credits**, so the estimate is higher than the real liability for
   anyone who qualifies for one. The full list of what is not modeled is shown
-  under every estimate and in the printed organizer.
+  under every estimate and in the printed report.
 - **Estimated payments are recorded, not sent,** and the estimate does not work
   out due dates or underpayment penalties.
 - **Plaid sandbox only.** Its sample data is regenerated whenever a bank is
   linked, so re-linking an existing test account duplicates its history —
   start a new test user for fresh bank data.
+- **The policies were written from the code, not by a lawyer**, and the
+  operator's governing state and postal address are still to be filled in
+  (`src/lib/legal.ts`).
 - Engineering items still open are tracked in [PLAN.md](PLAN.md).
 
 ## Documentation
@@ -198,6 +229,9 @@ docs/
 | [`src/components/README.md`](src/components/README.md) | UI tokens, components and page conventions |
 | [`prisma/migrations/README.md`](prisma/migrations/README.md) | Schema history and how to apply it |
 | [`docs/audits/`](docs/audits/) | The three audits, their evidence and their triage |
+| [`docs/security-program.md`](docs/security-program.md) | The written security program: data held, safeguards, retention, incidents |
+| [`docs/legal-changelog.md`](docs/legal-changelog.md) | What changed in each version of the Terms and Privacy Policy |
+| [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) | Licence texts of the runtime dependencies, the typeface and the icon |
 
 Pages moved in the 2026-09 redesign: `/deductions` is now `/transactions` and
 `/mileage`, `/student` is `/education`, and `/export` is `/report`. The old
@@ -205,4 +239,5 @@ paths redirect.
 
 ## License
 
-For educational and portfolio purposes.
+The code is for educational and portfolio purposes. The packages it is built
+on keep their own licences; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

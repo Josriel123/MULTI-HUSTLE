@@ -9,12 +9,14 @@ import { Term } from '../ui/Term';
 /**
  * Cumulative total income and safe-to-spend by month, straight from the chart
  * endpoint (a full estimate per month). Colours are the theme's tokens, so the
- * chart follows light and dark mode.
+ * chart follows light and dark mode. A screen reader gets the same figures as
+ * a table (visually hidden), since the drawing itself cannot be read.
  */
 export function YearChart({ chart, taxYear }: { chart: ChartResponse | null; taxYear: number }) {
   const points = chart?.points ?? [];
   return (
-    <Card>
+    // min-w-0: a grid or flex parent must never be widened by the chart (it once pushed phones sideways).
+    <Card className="min-w-0">
       <CardHeader>
         <div>
           <CardTitle>Your year so far</CardTitle>
@@ -34,11 +36,16 @@ export function YearChart({ chart, taxYear }: { chart: ChartResponse | null; tax
           </span>
         </div>
       </CardHeader>
-      <div className="h-64 w-full md:h-72" role="img" aria-label={`Chart of total income and safe to spend by month for ${taxYear}`}>
+      <div
+        className="h-64 w-full min-w-0 overflow-hidden md:h-72"
+        role="img"
+        aria-label={`Chart of total income and safe to spend by month for ${taxYear}. The same figures follow as a table.`}
+      >
         {points.length > 0 && (
           // A starting size, so the first render (before the container is
-          // measured) is not a -1 x -1 chart, which Recharts warns about.
-          <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 720, height: 288 }}>
+          // measured) is not a -1 x -1 chart, which Recharts warns about. Phone
+          // sized, so it can never be wider than the screen it starts on.
+          <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 320, height: 256 }}>
             <AreaChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id="fillNet" x1="0" y1="0" x2="0" y2="1">
@@ -71,6 +78,27 @@ export function YearChart({ chart, taxYear }: { chart: ChartResponse | null; tax
           </ResponsiveContainer>
         )}
       </div>
+      {points.length > 0 && (
+        <table className="sr-only">
+          <caption>Running totals by month for {taxYear}</caption>
+          <thead>
+            <tr>
+              <th scope="col">Month</th>
+              <th scope="col">Total income</th>
+              <th scope="col">Safe to spend</th>
+            </tr>
+          </thead>
+          <tbody>
+            {points.map((p) => (
+              <tr key={p.month}>
+                <th scope="row">{p.month}</th>
+                <td>{formatCurrency(p.gross)}</td>
+                <td>{formatCurrency(p.net)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </Card>
   );
 }

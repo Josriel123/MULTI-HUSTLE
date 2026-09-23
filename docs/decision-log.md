@@ -15,11 +15,12 @@ old entry and change nothing else in it.
 
 | Area | Entries |
 |---|---|
-| Scope and process | [D1](#d1) · [D9](#d9) · [D12](#d12) · [D27](#d27) · [D36](#d36) |
+| Scope and process | [D1](#d1) · [D9](#d9) · [D12](#d12) · [D27](#d27) · [D36](#d36) · [D47](#d47) · [D50](#d50) |
 | Data and money | [D2](#d2) · [D3](#d3) · [D10](#d10) · [D15](#d15) · [D20](#d20) · [D22](#d22) · [D32](#d32) · [D37](#d37) |
-| Tax engine | [D8](#d8) · [D11](#d11) · [D13](#d13) · [D14](#d14) · [D17](#d17) · [D28](#d28) · [D29](#d29) · [D30](#d30) |
-| Auth, Plaid and security | [D4](#d4) · [D5](#d5) · [D6](#d6) · [D7](#d7) · [D23](#d23) · [D31](#d31) |
-| UI | [D16](#d16) · [D18](#d18) · [D19](#d19) · [D21](#d21) · [D24](#d24) · [D25](#d25) · [D26](#d26) · [D33](#d33) · [D34](#d34) · [D35](#d35) · [D38](#d38) |
+| Tax engine | [D8](#d8) · [D11](#d11) · [D13](#d13) · [D14](#d14) · [D17](#d17) · [D28](#d28) · [D29](#d29) · [D30](#d30) · [D48](#d48) |
+| Auth, Plaid and security | [D4](#d4) · [D5](#d5) · [D6](#d6) · [D7](#d7) · [D23](#d23) · [D31](#d31) · [D45](#d45) |
+| Privacy, consent and policies | [D39](#d39) · [D40](#d40) · [D41](#d41) · [D42](#d42) · [D49](#d49) |
+| UI | [D16](#d16) · [D18](#d18) · [D19](#d19) · [D21](#d21) · [D24](#d24) · [D25](#d25) · [D26](#d26) · [D33](#d33) · [D34](#d34) · [D35](#d35) · [D38](#d38) · [D43](#d43) · [D44](#d44) · [D46](#d46) |
 
 ---
 
@@ -38,6 +39,8 @@ Plaid stays in its sandbox.
 code quality. The cheap parts are exactly what makes a portfolio piece hold up
 when someone pokes at it — and nothing here has to be rewritten to go real
 later; the compliance layer would only be added.
+
+*Partly superseded by [D50](#d50): the privacy and consent layer is now built.*
 
 ### <a id="d2"></a>D2 · Postgres (Neon) everywhere; money is DECIMAL(12,2), never Float
 
@@ -538,3 +541,226 @@ count ([D19](#d19)). The CSV is built from a `Blob`.
 the amounts entered as "deductible operating expenses", which overstated them
 wherever a limit applied (meals at 50%, the vehicle method). Its CSV was a
 `data:` URI, which a `#` in any description cut short.
+
+## 2026-09-23 — Policies, consent, the tour and the phone
+
+### <a id="d39"></a>D39 · Public pages live outside sign-in, in their own route group
+
+**Decision.** The app is split into route groups: `(public)` for the welcome
+page, About, every policy under `/legal`, and the app's own sign-in and
+sign-up pages; `(app)` for the signed-in app; `(preview)` for the dev-only
+preview. The proxy lets `(public)` through, and a signed-out visit to `/`
+goes to `/welcome` instead of a bare sign-in form. Every page's footer links
+the policies.
+
+**Why.** Policies have to be readable before anyone signs up: California's
+CalOPPA wants the privacy policy conspicuously linked from the home page, and
+a clickwrap agreement is only enforceable if the terms were available before
+the person agreed. A first-time visitor should learn what the app is, and what
+it is not, before being asked for an email address.
+
+The preview ([D36](#d36)) moved to `src/app/(preview)/preview/[[...page]]/`,
+where its layout is the app frame without the agreement step.
+
+**Where.** `src/app/(public)/`, `src/proxy.ts`, `src/lib/legal.ts`
+(`LEGAL_PAGES`, operator details), `src/components/legal/`.
+
+### <a id="d40"></a>D40 · A versioned clickwrap agreement and an 18+ check come before the app
+
+**Decision.** After signing up, nothing in the app renders until the person
+ticks two unticked boxes, "I am 18 or older" and "I have read and agree to the
+Terms of Service and the Privacy Policy" (both linked), and presses "Agree and
+continue". The server records the version on screen and its own time
+(`User.agreementVersion`, `agreementAcceptedAt`, `adultConfirmedAt`), refuses a
+stale version with 409, and a new `LEGAL.agreementVersion` asks everyone again.
+"I'm under 18" leads to deleting the account, and the answer sticks on that
+device.
+
+**Why.** Courts enforce clickwrap when the person took an affirmative action
+next to visible terms; a pre-ticked box or a "by using this site" line is
+weaker. The record (version and server time) is the evidence. The app is not
+meant for children: COPPA forbids collecting from under-13s without verified
+parental consent, and financial data about minors is a risk with no upside
+here, so the line is 18 and an under-18 answer ends in deletion rather than a
+back button (the FTC's guidance is that an age screen should not invite a
+second try).
+
+**Where.** `src/components/legal/AgreementGate.tsx`, `src/lib/agreement.ts`,
+`/api/account` and `/api/account/agreement`, migration
+`20260924000000_consent_record`.
+
+### <a id="d41"></a>D41 · Download, delete and disconnect are buttons, not requests
+
+**Decision.** Account & privacy has "Download my data" (a JSON file of every
+row the app holds, the Plaid token left out) and "Delete my account" (every
+row, then the Clerk user). Deleting and the Clerk `user.deleted` webhook call
+the same `deleteUserData`, which first asks Plaid to revoke each bank
+connection (`/item/remove`). The bank card gains "Disconnect", which revokes
+at Plaid and deletes the token but keeps the transactions. Email requests
+still work, with a 30-day answer.
+
+**Why.** The rights the Privacy Policy describes (to know, to delete) are only
+real if they are easy; the FTC treats obstructed cancellation and deletion as
+a dark pattern. Plaid's policies expect an app to stop accessing an account
+when the user leaves. Revocation is best effort: an unreachable Plaid never
+keeps data or a token on file, and the response says when Plaid did not
+confirm.
+
+**Where.** `src/lib/userData.ts`, `src/app/(app)/account/page.tsx`,
+`/api/account`, `/api/account/export`, `/api/plaid/disconnect`,
+`src/components/transactions/BankCard.tsx`.
+
+### <a id="d42"></a>D42 · The cookie notice informs; it does not ask
+
+**Decision.** The app sets only the cookies Clerk needs for sign-in and keeps
+four small preferences in `localStorage`, so the notice says exactly that,
+with one "OK" and a link to the Cookie Policy. There is no accept/reject
+choice, because there is nothing optional to choose.
+
+**Why.** Essential storage needs no consent under the laws that ask for it
+(the ePrivacy rule's "strictly necessary" exemption; US state laws regulate
+selling, sharing and targeted advertising, none of which happens). A consent
+banner offering a choice that changes nothing would itself be misleading.
+Anything non-essential added later (analytics, ads, a chat widget) must be
+off until the person opts in, and goes into the Cookie Policy and
+`SERVICE_PROVIDERS` first.
+
+**Where.** `src/components/legal/CookieNotice.tsx`,
+`src/app/(public)/legal/cookies/page.tsx`.
+
+### <a id="d43"></a>D43 · A guided tour explains every tab once, and can always be skipped
+
+**Decision.** On a first visit a speech-bubble tour ("Sprout") points at each
+tab in turn, fourteen short steps in the order a newcomer meets them. It can
+be skipped at every step, is driven by keyboard (arrows, Escape) as well as
+buttons, keeps focus inside the bubble, and can be replayed from the sidebar
+and from Account & privacy. On a phone it opens the menu for the tabs that
+live there. `tour-steps.test.ts` fails if a step points at a tab that no
+longer exists, or a tab has no step.
+
+**Why.** The owner asked for game-style onboarding for people who have never
+done their own taxes. It is skippable because a tour that cannot be dismissed
+is an obstacle, and it measures its targets at runtime (re-measuring when the
+menu's slide-in ends), because a fixed delay once caught the menu mid-slide
+and lit a spot off the screen. The phone menu stays a custom modal rather
+than a native `<dialog>`: the top layer would draw it above the tour.
+
+**Where.** `src/components/tour/`, `src/components/AppShell.tsx`.
+
+### <a id="d44"></a>D44 · On a phone: bottom tabs, a quick-add button, and an installable app
+
+**Decision.** Below 1024px the sidebar becomes a bottom tab bar (Overview,
+Money, Report, More) with a "+" that adds money in, money out, a trip or a tax
+payment. The app ships a web manifest and icons, generated from the brand
+constants, so it can be added to a home screen; it does not lock orientation.
+Floating things sit above the tab bar and the safe-area inset.
+
+**Why.** Gig workers record a payout or a trip where it happens. Locking
+orientation would fail WCAG 1.3.4. The income chart used to render 720px wide
+before measuring its box, which pushed a 375px screen sideways; it now starts
+phone-sized and cannot widen its card.
+
+**Where.** `src/components/AppShell.tsx`, `src/app/manifest.ts`,
+`src/app/icon.svg`, `src/app/apple-icon.png`, `public/icons/`,
+`src/lib/brand.ts`.
+
+### <a id="d45"></a>D45 · Security headers now; a full Content Security Policy later
+
+**Decision.** Every response carries `X-Frame-Options: DENY`, a CSP of
+`frame-ancestors 'none'; base-uri 'self'; object-src 'none'`, `nosniff`,
+`strict-origin-when-cross-origin`, HSTS, `same-origin-allow-popups` and a
+restrictive `Permissions-Policy`; `X-Powered-By` is off. `security.txt`
+names the security contact.
+
+**Why.** These stop clickjacking and a few injection tricks at no risk. A full
+script policy is deferred: Clerk and Plaid load scripts, frames and workers
+from their own domains, and a policy that missed one would break sign-in or
+bank linking in production, where development would not show it.
+
+**Where.** `next.config.ts`, `public/.well-known/security.txt`,
+`docs/security-program.md`.
+
+### <a id="d46"></a>D46 · Contrast is tested on the tokens
+
+**Decision.** `contrast.test.ts` reads `globals.css` and fails unless every
+text token is 4.5:1 on every surface in both themes (and on its own 10% tint),
+filled-button text is 4.5:1, and control outlines and the focus ring are 3:1.
+To pass, the light theme's faint text, warning and danger colours were
+darkened, and a new `field-border` token outlines text boxes and the chosen
+segment of a segmented control. The test also checks that the brand constants
+equal the tokens.
+
+**Why.** The light faint text was 4.2:1 on grey surfaces and text boxes were
+outlined at about 1.3:1, both below WCAG 2.2 AA. Checking tokens, not pages,
+means no future page can reintroduce a failing pair.
+
+**Where.** `src/app/__tests__/contrast.test.ts`, `src/app/globals.css`.
+
+### <a id="d47"></a>D47 · Schema changes that ship with code are additive first
+
+**Decision.** The consent migration only adds nullable columns, so it can be
+applied while the previous release is still serving. Dropping `User.plan`
+(a "Pro Plan" string nothing reads, on every row) waits for a follow-up
+migration once this release is live; until then the code simply stops
+mentioning it and the column's default fills it on insert.
+
+**Why.** Migrations are applied by hand and deploys happen on push, so there
+is always a window where one has happened and not the other. A migration that
+added the new columns and dropped the old one would break whichever release
+was running during that window: the old code still selects `plan`, the new
+code needs the consent columns.
+
+**Where.** `prisma/migrations/20260924000000_consent_record/`,
+`prisma/migrations/README.md`, `PLAN.md`.
+
+### <a id="d48"></a>D48 · Every estimate names the IRS figures it uses
+
+**Decision.** The summary response carries `rules` (tax year, the revenue
+procedure with that year's figures, its link), and `EstimateNotice` prints
+"Uses the IRS's figures for tax year 2026 (Rev. Proc. 2025-32)" under the
+disclaimer on every page.
+
+**Why.** The Terms of Service promise it, and a reader comparing the estimate
+with a return should know which year's brackets and limits produced it.
+
+**Where.** `src/lib/dashboard.ts` (`rulesFor`), `src/components/EstimateNotice.tsx`.
+
+### <a id="d49"></a>D49 · Product copy states only what the code does
+
+**Decision.** No testimonials, ratings, user counts, countdowns or urgency; no
+"bank-level" or "guaranteed" language; limits are stated as plainly as
+features (federal only, no credits, may be higher or lower, not affiliated
+with the IRS, Plaid in test mode while it is). "Share" is used only in the
+advertising sense California law gives it, never as "we share nothing",
+because service providers do receive data. The app is free and never asks for
+payment details, and says so.
+
+**Why.** The FTC's rule on reviews (16 CFR Part 465) and section 5 of the FTC
+Act make fake reviews and unsupported claims actionable; an honest limit costs
+less than a complaint. Each claim on the welcome page was checked against the
+code when it was written.
+
+**Where.** `src/app/(public)/welcome/page.tsx`, the policies,
+`src/components/transactions/BankCard.tsx`.
+
+### <a id="d50"></a>D50 · The compliance layer D1 deferred is built now; Plaid production still waits
+
+**Decision.** Extends and partly supersedes [D1](#d1). The app now has what a
+public sign-up needs: the policies (D39), a recorded agreement and age check
+(D40), download, deletion and disconnect in the app (D41), an honest cookie
+notice (D42), an accessibility statement backed by tests (D46), a written
+security program, and third-party notices. Still out of scope: Plaid
+production access, audit logging, SOC 2. Plaid stays in its sandbox until the
+owner completes Plaid's production review (`docs/security-program.md`).
+
+**Why.** The owner asked for the app to be safe to offer to real people. A
+public page that takes sign-ups is a product whether or not it is called one:
+a privacy policy (CalOPPA), truthful claims (FTC Act section 5) and the age
+line (COPPA) apply as soon as strangers can sign up. The policies were written
+for this app, from its code, but by no lawyer; `LEGAL.governingState` and the
+postal address are the owner's to fill in, and a lawyer's review before
+growth is the recommendation that stands.
+
+**Where.** `src/lib/legal.ts`, `docs/security-program.md`,
+`docs/legal-changelog.md`, `THIRD_PARTY_NOTICES.md`.
+

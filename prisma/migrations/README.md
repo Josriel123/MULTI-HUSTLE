@@ -13,6 +13,7 @@ schema before and after, so the SQL is reviewable rather than implied by
 | `20260910000100_form_tax_year` | Phase 3.5: `taxYear` on `Form1098T`, `Form1098E`, `HomeOfficeDeduction` under `@@unique([userId, taxYear])`. |
 | `20260916000000_category_is_source_of_truth` | Data only, no schema change (e2e audit F2). Expense rows with `taxDeductible = false` in a Schedule C category move to `personal`; rows with `taxDeductible = true` and no category get `other_business_expense` (the treatment they already received); then `taxDeductible` is recomputed from the category for every row. Idempotent and null-safe (`COALESCE(category IN (...), false)`). The deductible list must match `DEDUCTIBLE_EXPENSE_CATEGORIES` in `src/lib/tax/categories.ts`; `src/lib/tax/__tests__/migrations.test.ts` runs every migration on PGlite, seeds eleven rows covering each case, and asserts the outcome, the row count, the amount sum, idempotency and the list match. |
 | `20260923000000_w2_payments_profile` | Additive only. `User.spouseItemizes BOOLEAN NOT NULL DEFAULT false`, `User.taxProfileSavedAt TIMESTAMP NULL` (null until the tax profile is saved, so the default filing status is reported as assumed), `Form1098T.restrictedToNonQualifiedExpenses DECIMAL(12,2) NOT NULL DEFAULT 0`, and two tables: `W2Form` (boxes 1, 2, 3, 5, 6, 7 and whose W-2 it is, by tax year) and `EstimatedTaxPayment` (by the tax year paid for). Both reference `User` with `ON DELETE RESTRICT` like every other table, indexed on `(userId, taxYear)`. Identical to what `prisma migrate diff` generates from the live schema; `migrations.test.ts` runs it on PGlite over seeded rows. |
+| `20260924000000_consent_record` | Additive only: three nullable columns on `User`, `agreementVersion`, `agreementAcceptedAt` and `adultConfirmedAt` (the clickwrap record and the age check, D40). Nothing is back-filled: existing users are asked once. It deliberately leaves `User.plan` in place (D47): the release serving while it is applied still selects that column. `migrations.test.ts` checks that every existing column survives and that a user can still be created without naming `plan`. |
 
 ## Status
 
@@ -49,21 +50,40 @@ the three rows are deducted as before. The two "gas" rows are worth
 re-categorising as `car_and_truck` by hand so the one-method vehicle rule sees
 them.
 
-**`20260923000000_w2_payments_profile` is committed but not applied.** It is
-additive: existing rows only gain the column defaults. Apply it, then
-regenerate the client with the dev server stopped:
+**`20260923000000_w2_payments_profile` was applied to main on 2026-09-23** by
+the owner. Measured read-only immediately before: 8 users, 128 transactions
+summing 171,070.25, three 1098-T rows, two 1098-E rows, three home office
+rows, two mileage logs, ten income sources; six migrations applied. Checked
+afterwards, read-only: every one of those unchanged, `User.spouseItemizes`
+false and `taxProfileSavedAt` null on all eight users, the two new tables
+empty, seven migrations applied.
+
+**`20260924000000_consent_record` is committed; apply it before this release
+is deployed.** It only adds columns, so the release that is live now keeps
+working after it, and the new release needs it. With the dev server running
+or not:
 
 ```bash
 npx prisma migrate deploy
-npx prisma generate
 ```
 
-Measured on main immediately before, read-only (2026-09-23): 8 users, 128
-transactions summing 171,070.25, three 1098-T rows, two 1098-E rows, three
-home office rows, two mileage logs, ten income sources; six migrations applied.
-After it runs, every one of those should be unchanged, `User.spouseItemizes`
-false and `taxProfileSavedAt` null on all eight users, and the two new tables
-empty.
+Then stop the dev server, run `npx prisma generate`, and start it again.
+Measured on main immediately before, read-only (2026-09-23 14:30 UTC): 8
+users, 128 transactions summing 171,070.25, three 1098-T, two 1098-E, three
+home office rows, two mileage logs, ten income sources, three bank
+connections, no W-2s or payments; seven migrations applied; `User` has `plan`
+and none of the three new columns. After it runs, every count should be
+unchanged and the three new columns null on all eight users.
+
+**Next, after this release is live: drop `User.plan`.** Nothing reads it (it
+held the string "Pro Plan" on every row, for a plan that does not exist), and
+`schema.prisma` no longer declares it. Add it as its own migration only once
+no running release selects the column:
+
+```sql
+-- prisma/migrations/<timestamp>_drop_user_plan/migration.sql
+ALTER TABLE "User" DROP COLUMN "plan";
+```
 
 ## Applying to another existing database (created with `db push`)
 

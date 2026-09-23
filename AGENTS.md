@@ -53,6 +53,25 @@ everything outside its markers alone.
 13. **Paychecks are never wages.** Wages come from W-2s; a spouse's W-2
     counts only on a joint return; Social Security boxes are per person.
     (D28)
+14. **The policies say what the code does.** A change to what is collected,
+    who receives it (`SERVICE_PROVIDERS` in `src/lib/legal.ts`), the cookies
+    and browser-storage keys, or how long data is kept updates the Privacy or
+    Cookie Policy in the same commit; if it matters to users, bump
+    `LEGAL.agreementVersion` and add a line to `docs/legal-changelog.md`, and
+    everyone is asked to agree again. (D39, D40, D42)
+15. **Nothing non-essential without an opt-in.** No analytics, ads, trackers
+    or third-party widgets that set cookies or read storage until the person
+    has said yes; then the Cookie Policy and the notice change first. No
+    marketing email without consent, an unsubscribe link and a postal address
+    (CAN-SPAM). (D42)
+16. **Claim only what the code does.** No testimonials, ratings, user
+    counts, urgency, "bank-level" or "guaranteed"; state limits as plainly as
+    features; never imply IRS affiliation or that the estimate is advice or a
+    return. (D49)
+17. **Public pages stay public.** A page a signed-out visitor needs (a policy,
+    sign-in) lives in `src/app/(public)/` and is listed in the proxy's
+    `isPublicRoute`; everything else sits behind sign-in and the agreement
+    step in `src/app/(app)/`. (D39, D40)
 
 ## Data safety
 
@@ -63,8 +82,15 @@ everything outside its markers alone.
   regenerates its history on every link, so the account would show it twice.
   Use a fresh test user. (D23)
 - `prisma/seed.ts` requires `SEED_USER_ID` and touches only that user.
-- A new model with a `userId` must be added to the Clerk `user.deleted`
-  webhook; `clerk-webhook-delete.test.ts` fails until it is. (D32)
+- A new model with a `userId` must be added to `deleteUserData` and
+  `exportUserData` in `src/lib/userData.ts` (the in-app deletion, the export
+  and the Clerk `user.deleted` webhook all use them);
+  `src/lib/__tests__/user-data.test.ts` reads the schema and fails until it
+  is. (D32, D41)
+- A migration that ships with code only adds (columns nullable or with a
+  default). Drop or rename in a later migration, once no running release
+  reads the old column: migrations are applied by hand and deploys happen on
+  push, so both releases meet the same schema for a while. (D47)
 
 ## Process
 
@@ -74,7 +100,9 @@ everything outside its markers alone.
   file in the same commit wherever the decision changes what they say. (D27)
 - Check a UI change at `/preview/<page>` (dev only, sample data through the
   real engine) in light and dark, at 1280px and 375px. It shows what the code
-  renders; a signed-in click-through is still the final check. (D36)
+  renders; a signed-in click-through is still the final check. (D36) A new
+  tab needs a `data-tour` and a tour step; a new colour pair needs a line in
+  `contrast.test.ts`. (D43, D46)
 - On Windows, stop `next dev` before `prisma generate` (and restart it after):
   the dev server holds the query engine open. `next build` has failed the
   same way.

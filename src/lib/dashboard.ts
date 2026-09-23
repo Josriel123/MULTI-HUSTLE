@@ -1,5 +1,6 @@
 import {
   estimateFromRows,
+  getTaxYearParameters,
   isAboveZero,
   money,
   notBelowZero,
@@ -45,8 +46,8 @@ export interface EstimateInputRows extends BuildInputArgs {
  *   counts                what is on file, for the setup checklist
  *   estimate              the engine's full result, every Money as a number
  *
- * `disclaimer`, `warnings`, `assumptions` and `notModeled` must be shown
- * wherever a figure from this response is.
+ * `disclaimer`, `warnings`, `assumptions`, `notModeled` and `rules` must be
+ * shown wherever a figure from this response is.
  */
 export function summaryPayload(rows: EstimateInputRows, routeWarnings: readonly Warning[] = []) {
   const { built, estimate, safeToSpend } = estimateFromRows(rows);
@@ -131,7 +132,18 @@ export function summaryPayload(rows: EstimateInputRows, routeWarnings: readonly 
     warnings: [...routeWarnings, ...built.warnings, ...estimate.warnings],
     assumptions: [...built.assumptions, ...estimate.assumptions],
     notModeled: estimate.notModeled,
+    rules: rulesFor(rows.taxYear),
   };
+}
+
+/**
+ * Which IRS figures the estimate used: the year's first source, the revenue
+ * procedure with that year's inflation-adjusted amounts. Every estimate names
+ * it (the Terms of Service promise so), and the report lists the rest.
+ */
+function rulesFor(taxYear: number): { taxYear: number; source: string; url: string | null } {
+  const primary = getTaxYearParameters(taxYear).sources[0];
+  return { taxYear, source: primary.label, url: primary.url ?? null };
 }
 
 export type SummaryPayload = ReturnType<typeof summaryPayload>;

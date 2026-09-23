@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { verifyWebhook } from '@clerk/nextjs/webhooks';
-import { prisma } from '@/lib/prisma';
 import { upsertUser } from '@/lib/user';
+import { deleteUserData } from '@/lib/userData';
 
 /**
  * Clerk webhook — keeps the local User table in step with Clerk.
@@ -46,24 +46,11 @@ export async function POST(req: NextRequest) {
       case 'user.deleted': {
         const id = evt.data.id;
         if (!id) break;
-        // Children are deleted explicitly: the schema has no cascade rules, so
-        // deleting the User alone would fail on its foreign keys. Order
-        // matters: transactions and trips point at income sources, so they go
-        // first. src/app/api/__tests__/clerk-webhook-delete.test.ts fails if a
-        // table with a userId is added to the schema but not here (MileageLog
-        // was missing, which made every account deletion fail).
-        await prisma.$transaction([
-          prisma.transaction.deleteMany({ where: { userId: id } }),
-          prisma.mileageLog.deleteMany({ where: { userId: id } }),
-          prisma.incomeSource.deleteMany({ where: { userId: id } }),
-          prisma.plaidConnection.deleteMany({ where: { userId: id } }),
-          prisma.form1098T.deleteMany({ where: { userId: id } }),
-          prisma.form1098E.deleteMany({ where: { userId: id } }),
-          prisma.homeOfficeDeduction.deleteMany({ where: { userId: id } }),
-          prisma.w2Form.deleteMany({ where: { userId: id } }),
-          prisma.estimatedTaxPayment.deleteMany({ where: { userId: id } }),
-          prisma.user.deleteMany({ where: { id } }),
-        ]);
+        // The same deletion as the in-app "Delete my account": every table
+        // with a userId, children first, and any bank connection revoked at
+        // Plaid (src/lib/userData.ts, where a test keeps the list complete).
+        // Idempotent: after an in-app deletion this finds nothing to delete.
+        await deleteUserData(id);
         break;
       }
 
