@@ -18,8 +18,13 @@ const isPublicRoute = createRouteMatcher([
 
 const isApiRoute = createRouteMatcher(['/api/(.*)'])
 
+// The sample-data preview of the pages (src/app/preview). Outside production
+// only; the page itself also 404s in production.
+const isDevPreview = createRouteMatcher(['/preview', '/preview/(.*)'])
+
 export default clerkMiddleware(async (auth, request) => {
   if (isPublicRoute(request)) return
+  if (process.env.NODE_ENV !== 'production' && isDevPreview(request)) return
 
   // API routes authenticate themselves — every handler calls auth() or
   // requireUser() and returns a JSON 401. Calling auth.protect() here instead

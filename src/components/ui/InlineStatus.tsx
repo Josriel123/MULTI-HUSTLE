@@ -14,7 +14,7 @@ const KIND: Record<StatusKind, { icon: typeof Info; className: string; role: 'st
 export function InlineStatus({ kind, className, children }: { kind: StatusKind; className?: string; children: ReactNode }) {
   const { icon: Icon, className: tone, role } = KIND[kind];
   return (
-    <div role={role} className={cn('flex items-start gap-2 text-sm', tone, className)}>
+    <div role={role} className={cn('flex animate-fade-in items-start gap-2 text-sm font-medium', tone, className)}>
       <Icon size={16} className="mt-0.5 shrink-0" aria-hidden />
       <span>{children}</span>
     </div>

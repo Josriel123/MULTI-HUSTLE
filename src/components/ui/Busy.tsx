@@ -8,11 +8,13 @@ import { cn } from '../cn';
  */
 export function Busy({ busy, className, children }: { busy: boolean; className?: string; children: ReactNode }) {
   return (
-    <div
-      aria-busy={busy || undefined}
-      className={cn('transition-[opacity,filter] duration-300', busy && 'pointer-events-none select-none opacity-60 blur-[2px]', className)}
-    >
+    <div aria-busy={busy || undefined} className={cn('transition-opacity duration-300', busy && 'pointer-events-none select-none opacity-50', className)}>
       {children}
     </div>
   );
+}
+
+/** A grey placeholder bar for a figure that has not loaded yet. */
+export function Skeleton({ className }: { className?: string }) {
+  return <span aria-hidden className={cn('inline-block animate-pulse rounded-md bg-surface', className)} />;
 }

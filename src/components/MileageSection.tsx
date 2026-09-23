@@ -1,320 +1,223 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { PlusCircle, Trash2 } from 'lucide-react';
+import { Car, Gauge, Plus, Route, Trash2 } from 'lucide-react';
 import {
   createMileage,
   deleteMileage,
   errorText,
+  type EstimatePayload,
+  type HustleItem,
   type MileageLogItem,
   type MileageRatePeriodPayload,
 } from './api';
-import { defaultTransactionDate, formatCurrency, formatDate, formatMiles, mileageRateSummary } from './format';
+import { defaultTransactionDate, formatCurrency, formatDate, formatDollarRate, formatMiles, mileageRateSummary } from './format';
+import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
+import { Callout } from './ui/Callout';
 import { Card, CardDescription, CardHeader, CardTitle } from './ui/Card';
 import { useConfirm } from './ui/ConfirmDialog';
-import { Field, FieldGrid, Input } from './ui/Field';
+import { EmptyState } from './ui/EmptyState';
+import { Field, FieldGrid, Input, Select } from './ui/Field';
 import { InlineStatus } from './ui/InlineStatus';
 import { StatCard } from './ui/StatCard';
+import { Term } from './ui/Term';
 
 export interface MileageSectionProps {
   logs: MileageLogItem[];
   totalMiles: string;
-  totalDeduction: string;
   /** The selected year's standard mileage rate(s), from the API. */
   ratePeriods: MileageRatePeriodPayload[];
+  /** The engine's line 9 result for the year, from the summary: what was actually deducted, and by which method. */
+  vehicle: EstimatePayload['scheduleC']['mileage'] | null;
+  hustles: readonly HustleItem[];
   taxYear?: number;
   onRefresh: () => Promise<void>;
 }
 
-export function MileageSection({
-  logs,
-  totalMiles,
-  totalDeduction,
-  ratePeriods,
-  taxYear,
-  onRefresh,
-}: MileageSectionProps) {
+/**
+ * Business miles: log trips, see what they are worth, and what the estimate
+ * actually deducted. Those two can differ: a car is deducted either at the
+ * standard rate or at its actual costs, never both (Pub. 463), and the engine
+ * applies whichever is larger, so the "deducted" card reads the engine's
+ * choice rather than assuming the miles won.
+ */
+export function MileageSection({ logs, totalMiles, ratePeriods, vehicle, hustles, taxYear, onRefresh }: MileageSectionProps) {
   const [confirm, confirmDialog] = useConfirm();
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [listStatus, setListStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
-  const [formData, setFormData] = useState(() => ({
-    date: defaultTransactionDate(taxYear),
-    miles: '',
-    purpose: '',
-  }));
+  const [form, setForm] = useState(() => ({ date: defaultTransactionDate(taxYear), miles: '', purpose: '', incomeSourceId: '' }));
 
   const [prevTaxYear, setPrevTaxYear] = useState(taxYear);
   if (taxYear !== prevTaxYear) {
     setPrevTaxYear(taxYear);
-    setFormData((prev) => ({
-      ...prev,
-      date: defaultTransactionDate(taxYear),
-    }));
+    setForm((prev) => ({ ...prev, date: defaultTransactionDate(taxYear) }));
   }
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
-    if (!formData.miles) return;
+    if (!form.miles) return;
     setSubmitting(true);
     setStatus(null);
     try {
-      await createMileage({
-        date: formData.date,
-        miles: formData.miles,
-        purpose: formData.purpose || undefined,
-      });
-      setFormData({
-        date: defaultTransactionDate(taxYear),
-        miles: '',
-        purpose: '',
-      });
-      setStatus({ kind: 'ok', text: 'Business trip logged and priced at statutory IRS rate.' });
+      await createMileage({ date: form.date, miles: form.miles.trim(), purpose: form.purpose || undefined, incomeSourceId: form.incomeSourceId || undefined });
+      setForm((f) => ({ ...f, miles: '', purpose: '' }));
+      setStatus({ kind: 'ok', text: 'Trip saved. It is priced at the IRS rate for its date.' });
       await onRefresh();
     } catch (err: unknown) {
-      setStatus({ kind: 'error', text: err instanceof Error ? err.message : 'Failed to log mileage.' });
+      setStatus({ kind: 'error', text: errorText(err, 'Could not save the trip.') });
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function handleDelete(id: string) {
+  async function handleDelete(log: MileageLogItem) {
     const ok = await confirm({
       title: 'Delete this trip?',
-      body: 'Its miles come off Schedule C line 9 and the estimate is recalculated. This cannot be undone.',
+      body: `${formatMiles(log.miles)} on ${formatDate(log.date)} comes off your mileage and the estimate is worked out again. This cannot be undone.`,
       confirmLabel: 'Delete trip',
       tone: 'danger',
     });
     if (!ok) return;
     setListStatus(null);
     try {
-      await deleteMileage(id);
+      await deleteMileage(log.id);
       await onRefresh();
       setListStatus({ kind: 'ok', text: 'Trip deleted.' });
     } catch (err: unknown) {
-      setListStatus({ kind: 'error', text: errorText(err, 'Failed to delete the trip.') });
+      setListStatus({ kind: 'error', text: errorText(err, 'Could not delete the trip.') });
     }
   }
 
-  // From the engine, via the API. This used to copy the rate off the latest
-  // trip and, once the last trip was deleted, fall back to a '0.725' typed
-  // into this file — the Jan-Jun 2026 rate, wrong from July 1 and for every
-  // other year (second e2e pass, S2).
+  // From the engine, via the API; never a rate typed into this file.
   const rate = mileageRateSummary(ratePeriods, new Date().toISOString().slice(0, 10));
+  const method = vehicle?.methodApplied ?? 'none';
 
   return (
-    <div className="flex flex-col gap-6 md:gap-8">
-      {/* Metrics Row */}
-      <div className="grid gap-4 sm:grid-cols-3 md:gap-6">
+    <div className="flex flex-col gap-6">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard icon={<Route size={16} />} label="Business miles" value={formatMiles(totalMiles)} caption={`${logs.length} ${logs.length === 1 ? 'trip' : 'trips'} logged this year.`} />
+        <StatCard icon={<Gauge size={16} />} label={<Term k="standardMileage">IRS mileage rate</Term>} value={rate?.rate ?? '—'} caption={rate?.caption ?? 'No rate on file for this year.'} />
         <StatCard
-          label="Total Business Miles"
-          value={formatMiles(totalMiles)}
-          caption="Verified business miles logged for Schedule C"
-          accent="neutral"
-        />
-        <StatCard
-          label="IRS standard mileage rate"
-          value={rate?.rate ?? '—'}
-          caption={rate?.caption ?? 'No rate on file for this tax year.'}
-          accent="info"
-          tone="default"
-        />
-        <StatCard
-          // Not "Standard Deduction": that is Form 1040 line 12, a different
-          // figure entirely. This is the mileage deduction on Schedule C.
-          label="Mileage deduction"
-          value={formatCurrency(totalDeduction, { cents: true })}
-          // Deliberately conditional. When actual vehicle costs are larger,
-          // the engine applies those on line 9 and takes none of this
-          // (Pub. 463: one method per vehicle per year), and says so in a
-          // vehicle_method_conflict warning below. Showing the applied figure
-          // here instead is an open item in PLAN.md.
-          caption="Logged miles at each trip's rate (Schedule C line 9), unless actual vehicle costs are larger — then the estimate uses those instead"
-          accent="accent"
-          tone="accent"
+          icon={<Car size={16} />}
+          tone={method === 'none' ? 'default' : 'accent'}
+          label="Deducted for your car"
+          value={formatCurrency(vehicle?.line9 ?? 0)}
+          caption={
+            method === 'standard_mileage'
+              ? 'Your logged miles at the standard rate.'
+              : method === 'actual_expenses'
+                ? 'Your actual car costs, because they are larger than your miles are worth.'
+                : 'Log business trips, or record actual car costs, to claim this.'
+          }
         />
       </div>
 
-      {/* Log Mileage Form */}
-      <Card padding="lg">
-        <form onSubmit={handleCreate} className="flex flex-col gap-6">
-          <div>
-            <CardTitle>Record Business Mileage</CardTitle>
-            <CardDescription>
-              Log business trips. The engine automatically prices each trip based on the exact date and applicable statutory rate.
-            </CardDescription>
-          </div>
+      {method === 'actual_expenses' && vehicle && (
+        <Callout tone="info" title="The estimate uses your actual car costs instead of your miles">
+          Your miles are worth {formatCurrency(vehicle.standardMileageBeforeMethod)} at the standard rate, but you recorded {formatCurrency(vehicle.actualVehicleExpenses)} of actual car
+          costs (gas, repairs, insurance). A car is deducted one way or the other in a year, not both, so the larger one counts. If those costs are for a different car, keep logging trips
+          and talk to a tax professional.
+        </Callout>
+      )}
+      {method === 'standard_mileage' && vehicle && vehicle.actualVehicleExpenses > 0 && (
+        <Callout tone="info" title="Your miles beat your actual car costs">
+          The {formatCurrency(vehicle.actualVehicleExpenses)} of actual car costs you recorded is left out, because the standard rate on your miles is worth more and a car is deducted one
+          way or the other in a year.
+        </Callout>
+      )}
 
-          <FieldGrid>
-            <Field htmlFor="mileage-date" label="Trip Date">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_1fr]">
+        <Card padding="lg" className="self-start">
+          <form onSubmit={handleCreate} className="flex flex-col gap-4">
+            <div>
+              <CardTitle>Log a trip</CardTitle>
+              <CardDescription>Driving for your hustle: deliveries, rides, trips to clients or suppliers. Not your commute.</CardDescription>
+            </div>
+            <FieldGrid className="sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+              <Field htmlFor="trip-date" label="Date">
+                <Input id="trip-date" type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} required />
+              </Field>
+              <Field htmlFor="trip-miles" label="Miles">
+                <Input
+                  id="trip-miles"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="e.g. 24.5"
+                  value={form.miles}
+                  onChange={(e) => setForm((f) => ({ ...f, miles: e.target.value }))}
+                  required
+                />
+              </Field>
+            </FieldGrid>
+            <Field htmlFor="trip-purpose" label="What was it for?" hint="The IRS expects a business purpose for each trip.">
               <Input
-                id="mileage-date"
-                type="date"
-                value={formData.date}
-                onChange={(e) => setFormData((f) => ({ ...f, date: e.target.value }))}
-                required
+                id="trip-purpose"
+                value={form.purpose}
+                maxLength={200}
+                placeholder="e.g. Evening deliveries downtown"
+                onChange={(e) => setForm((f) => ({ ...f, purpose: e.target.value }))}
               />
             </Field>
-
-            <Field htmlFor="mileage-miles" label="Miles Driven" hint="Decimals accepted, e.g. 24.5">
-              <Input
-                id="mileage-miles"
-                type="number"
-                inputMode="decimal"
-                min="0.1"
-                step="0.1"
-                placeholder="e.g. 45.2"
-                value={formData.miles}
-                onChange={(e) => setFormData((f) => ({ ...f, miles: e.target.value }))}
-                required
-              />
-            </Field>
-          </FieldGrid>
-
-          <Field
-            htmlFor="mileage-purpose"
-            label="Business Purpose (Optional)"
-            hint="IRS requires substantiating the business character of the transportation"
-          >
-            <Input
-              id="mileage-purpose"
-              type="text"
-              placeholder="e.g. Customer food delivery run in downtown"
-              value={formData.purpose}
-              onChange={(e) => setFormData((f) => ({ ...f, purpose: e.target.value }))}
-            />
-          </Field>
-
-          <div className="flex flex-wrap items-center gap-4">
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              loading={submitting}
-              icon={<PlusCircle size={18} aria-hidden />}
-            >
-              Log Mileage
+            {hustles.length > 0 && (
+              <Field htmlFor="trip-hustle" label="Hustle" aside="Optional">
+                <Select id="trip-hustle" value={form.incomeSourceId} onChange={(e) => setForm((f) => ({ ...f, incomeSourceId: e.target.value }))}>
+                  <option value="">No hustle</option>
+                  {hustles.map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+            <Button type="submit" variant="primary" loading={submitting} icon={<Plus size={16} aria-hidden />}>
+              Save trip
             </Button>
             {status && <InlineStatus kind={status.kind}>{status.text}</InlineStatus>}
-          </div>
-        </form>
-      </Card>
+          </form>
+        </Card>
 
-      {/* Mileage Ledger */}
-      <Card padding="md">
-        <CardHeader>
-          <div>
-            <CardTitle>Trip History</CardTitle>
-            <CardDescription>
-              {logs.length} {logs.length === 1 ? 'trip' : 'trips'} recorded under IRC §162
-            </CardDescription>
-          </div>
-        </CardHeader>
-
-        {/* Delete results belong next to the list they changed, not in the form above. */}
-        {listStatus && (
-          <div className="mb-4">
-            <InlineStatus kind={listStatus.kind}>{listStatus.text}</InlineStatus>
-          </div>
-        )}
-
-        {logs.length === 0 ? (
-          <div className="py-12 text-center text-sm text-fg-muted">
-            No mileage entries logged yet. Record your business trips above to claim standard mileage deductions.
-          </div>
-        ) : (
-          <>
-            {/* Desktop Table: visible at md and above */}
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border text-xs uppercase tracking-wider text-fg-faint">
-                    <th className="pb-3 pl-2 pr-4 font-semibold">Date</th>
-                    <th className="pb-3 px-4 font-semibold">Distance</th>
-                    <th className="pb-3 px-4 font-semibold">Applicable Rate</th>
-                    <th className="pb-3 px-4 font-semibold">Business Purpose</th>
-                    <th className="pb-3 px-4 text-right font-semibold">Deduction</th>
-                    <th className="pb-3 pl-4 pr-2 text-right font-semibold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {logs.map((log) => (
-                    <tr key={log.id} className="transition-colors hover:bg-surface/50">
-                      <td className="py-3.5 pl-2 pr-4 tabular-nums text-fg-muted whitespace-nowrap">
-                        {formatDate(log.date)}
-                      </td>
-                      <td className="py-3.5 px-4 font-semibold tabular-nums text-fg whitespace-nowrap">
-                        {formatMiles(log.miles)}
-                      </td>
-                      <td className="py-3.5 px-4 text-fg-muted tabular-nums whitespace-nowrap">
-                        ${log.ratePerMile}/mi
-                      </td>
-                      <td className="py-3.5 px-4 text-fg-muted">
-                        <span className="truncate max-w-[280px] block">
-                          {log.purpose || 'Business transportation'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-right font-bold tabular-nums text-accent whitespace-nowrap">
-                        {formatCurrency(log.deduction, { cents: true })}
-                      </td>
-                      <td className="py-3.5 pl-4 pr-2 text-right whitespace-nowrap">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          aria-label="Delete trip"
-                          onClick={() => handleDelete(log.id)}
-                        >
-                          <Trash2 size={15} className="text-danger" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <Card padding="md">
+          <CardHeader>
+            <div>
+              <CardTitle>Trips</CardTitle>
+              <CardDescription>Each trip is priced at the IRS rate in force on its date.</CardDescription>
             </div>
-
-            {/* Mobile Stacked Cards: visible below md (eliminates horizontal overflow on 375px screens) */}
-            <div className="flex flex-col gap-3 md:hidden">
+          </CardHeader>
+          {listStatus && <InlineStatus kind={listStatus.kind} className="mb-3">{listStatus.text}</InlineStatus>}
+          {logs.length === 0 ? (
+            <EmptyState icon={<Car size={20} />} title="No trips logged yet">
+              Every business mile you log lowers your tax. Log trips as you go; a note of the date, the miles and why is the record the IRS asks for.
+            </EmptyState>
+          ) : (
+            <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
               {logs.map((log) => (
-                <div
-                  key={log.id}
-                  className="flex flex-col gap-2 rounded-lg border border-border bg-bg p-3.5 text-sm"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="font-bold text-fg text-base tabular-nums">{formatMiles(log.miles)}</div>
-                      <div className="text-xs text-fg-muted">{formatDate(log.date)}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-bold text-accent tabular-nums text-base">
-                        {formatCurrency(log.deduction, { cents: true })}
-                      </div>
-                      <div className="text-xs text-fg-faint">${log.ratePerMile}/mi</div>
+                <li key={log.id} className="flex items-center gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">
+                      {formatMiles(log.miles)}
+                      <span className="font-normal text-fg-faint"> · {formatDate(log.date)}</span>
+                    </p>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                      <span className="truncate text-xs text-fg-muted">{log.purpose || 'No purpose noted'}</span>
+                      {log.incomeSource && <Badge>{log.incomeSource.name}</Badge>}
                     </div>
                   </div>
-
-                  <div className="text-xs text-fg-muted">
-                    {log.purpose || 'Business transportation'}
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-semibold tabular-nums">{formatCurrency(log.deduction, { cents: true })}</p>
+                    <p className="text-xs text-fg-faint">at {formatDollarRate(log.ratePerMile)}</p>
                   </div>
-
-                  <div className="flex justify-end border-t border-border pt-2">
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      icon={<Trash2 size={14} />}
-                      onClick={() => handleDelete(log.id)}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </div>
+                  <Button variant="ghost" size="sm" className="px-2 hover:text-danger" aria-label="Delete trip" onClick={() => void handleDelete(log)}>
+                    <Trash2 size={15} aria-hidden />
+                  </Button>
+                </li>
               ))}
-            </div>
-          </>
-        )}
-      </Card>
-
+            </ul>
+          )}
+        </Card>
+      </div>
       {confirmDialog}
     </div>
   );

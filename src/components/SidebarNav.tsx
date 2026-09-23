@@ -2,43 +2,91 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Backpack, Home, LayoutDashboard, Printer, Receipt } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  Briefcase,
+  Car,
+  FileText,
+  GraduationCap,
+  Home,
+  Landmark,
+  LayoutDashboard,
+  UserRound,
+  type LucideIcon,
+} from 'lucide-react';
 import { cn } from './cn';
 
-const NAV_ITEMS = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/deductions', label: 'Deductions & Mileage', icon: Receipt },
-  { href: '/student', label: 'Student Forms', icon: Backpack },
-  { href: '/office', label: 'Home Office', icon: Home },
-  { href: '/export', label: 'CPA Export', icon: Printer },
-] as const;
+interface NavItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+}
+
+/**
+ * Grouped by what a person is doing, not by tax form: tracking money,
+ * claiming tax breaks, reading the result. Old paths (/deductions, /student,
+ * /export) redirect in next.config.ts.
+ */
+export const NAV_GROUPS: { heading?: string; items: NavItem[] }[] = [
+  { items: [{ href: '/', label: 'Overview', icon: LayoutDashboard }] },
+  {
+    heading: 'Your money',
+    items: [
+      { href: '/transactions', label: 'Income & expenses', icon: ArrowLeftRight },
+      { href: '/mileage', label: 'Mileage', icon: Car },
+      { href: '/jobs', label: 'W-2 jobs', icon: Briefcase },
+      { href: '/payments', label: 'Tax payments', icon: Landmark },
+    ],
+  },
+  {
+    heading: 'Tax breaks',
+    items: [
+      { href: '/office', label: 'Home office', icon: Home },
+      { href: '/education', label: 'Education', icon: GraduationCap },
+    ],
+  },
+  {
+    heading: 'Your estimate',
+    items: [
+      { href: '/report', label: 'Tax report', icon: FileText },
+      { href: '/profile', label: 'Tax profile', icon: UserRound },
+    ],
+  },
+];
 
 export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
-  const pathname = usePathname();
+  // The dev-only /preview/<page> renders real pages; highlight them as such.
+  const pathname = usePathname().replace(/^\/preview(?=\/|$)/, '').replace(/^\/overview$/, '') || '/';
   const searchParams = useSearchParams();
   const taxYear = searchParams.get('taxYear');
 
   return (
-    <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 px-4">
-      {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-        const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
-        const targetHref = taxYear ? `${href}?taxYear=${encodeURIComponent(taxYear)}` : href;
-        return (
-          <Link
-            key={href}
-            href={targetHref}
-            onClick={onNavigate}
-            aria-current={isActive ? 'page' : undefined}
-            className={cn(
-              'flex items-center gap-4 rounded-lg px-4 py-3 transition-colors duration-200',
-              isActive ? 'bg-card font-medium text-accent' : 'text-fg-muted hover:bg-card/60 hover:text-fg',
-            )}
-          >
-            <Icon size={20} aria-hidden />
-            {label}
-          </Link>
-        );
-      })}
+    <nav aria-label="Primary" className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 pb-4">
+      {NAV_GROUPS.map((group, i) => (
+        <div key={group.heading ?? i} className="flex flex-col gap-0.5">
+          {group.heading && <p className="px-3 pb-1.5 text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-fg-faint">{group.heading}</p>}
+          {group.items.map(({ href, label, icon: Icon }) => {
+            const isActive = href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
+            // The year travels with every link, so moving between pages never changes it.
+            const targetHref = taxYear ? `${href}?taxYear=${encodeURIComponent(taxYear)}` : href;
+            return (
+              <Link
+                key={href}
+                href={targetHref}
+                onClick={onNavigate}
+                aria-current={isActive ? 'page' : undefined}
+                className={cn(
+                  'group flex items-center gap-3 rounded-lg px-3 py-2 text-[0.925rem] transition-colors duration-150',
+                  isActive ? 'bg-accent/10 font-semibold text-accent' : 'text-fg-muted hover:bg-surface hover:text-fg',
+                )}
+              >
+                <Icon size={18} aria-hidden className={cn('shrink-0', isActive ? 'text-accent' : 'text-fg-faint group-hover:text-fg-muted')} />
+                {label}
+              </Link>
+            );
+          })}
+        </div>
+      ))}
     </nav>
   );
 }

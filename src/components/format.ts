@@ -63,6 +63,25 @@ export function formatPercent(fraction: number | null | undefined, maximumFracti
   return new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits }).format(fraction);
 }
 
+/**
+ * One engine line's value, in the unit the line says it is in (Line.unit):
+ * dollars by default, or square feet, a percentage, miles, dollars per mile.
+ */
+export function formatLineValue(value: number, unit?: string): string {
+  switch (unit) {
+    case 'fraction':
+      return formatPercent(value, 2);
+    case 'sqft':
+      return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value)} sq ft`;
+    case 'miles':
+      return formatMiles(value);
+    case 'usd_per_mile':
+      return `${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(value)}/mi`;
+    default:
+      return formatCurrency(value, { cents: true });
+  }
+}
+
 /** "other_business_expense" -> "Other business expense". Last resort for a slug with no known label. */
 export function humanizeSlug(slug: string): string {
   const words = slug.replace(/[_-]+/g, ' ').trim();
@@ -137,6 +156,17 @@ export function formatMileageRate(centsPerMile: string): string {
   const dollars = digits.slice(0, -2).replace(/^0+(?=\d)/, '');
   const decimals = (digits.slice(-2) + frac).replace(/0+$/, '').padEnd(2, '0');
   return `$${dollars}.${decimals}/mi`;
+}
+
+/**
+ * A dollars-per-mile string as the mileage API sends it ("0.7250") to
+ * "$0.725/mi": cents always shown, a half cent kept, trailing zeros dropped.
+ * String work only, like formatMileageRate.
+ */
+export function formatDollarRate(dollarsPerMile: string): string {
+  const [whole, frac = ''] = dollarsPerMile.trim().split('.');
+  const decimals = frac.replace(/0+$/, '').padEnd(2, '0');
+  return `$${whole || '0'}.${decimals}/mi`;
 }
 
 export interface MileageRateSummary {

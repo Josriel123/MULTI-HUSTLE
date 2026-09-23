@@ -1,32 +1,34 @@
 'use client';
 
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
-import { Menu, Shield, TrendingUp, X } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Lock, Menu, Sprout, X } from 'lucide-react';
 import { Show, SignInButton, UserButton } from '@clerk/nextjs';
 import SidebarNav from './SidebarNav';
+import { TaxYearSelect } from './TaxYearSelect';
 import { Button } from './ui/Button';
-
-const SIDEBAR_WIDTH = 'w-[260px]';
 
 function Brand() {
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent" aria-hidden>
-        <TrendingUp size={20} color="#000" strokeWidth={3} />
-      </div>
-      <span className="text-lg font-semibold tracking-tight">Multi-Hustle</span>
-    </div>
+    <Link href="/" className="flex items-center gap-2.5 rounded-lg">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-on-accent shadow-card" aria-hidden>
+        <Sprout size={18} strokeWidth={2.5} />
+      </span>
+      <span className="whitespace-nowrap text-[1.05rem] font-bold tracking-tight">Multi-Hustle</span>
+    </Link>
   );
 }
 
-function SecurityNote() {
+function SidebarFooter() {
   return (
-    <div className="border-t border-border px-6 py-6 text-sm text-fg-muted">
-      <div className="mb-1 flex items-center gap-2 text-fg">
-        <Shield size={16} className="text-accent" aria-hidden />
-        <span className="font-medium">Encrypted at rest</span>
-      </div>
-      <p>Bank connection tokens are stored with AES-256 encryption.</p>
+    <div className="mx-3 mb-4 rounded-xl border border-border bg-surface/70 p-3.5 text-xs leading-relaxed text-fg-muted">
+      <p className="font-semibold text-fg">A planning estimate</p>
+      <p className="mt-0.5">Federal tax only, from what you enter. Not tax advice and not a tax return.</p>
+      <p className="mt-2 flex items-center gap-1.5 text-fg-faint">
+        <Lock size={12} aria-hidden />
+        Bank connections are encrypted.
+      </p>
     </div>
   );
 }
@@ -34,7 +36,7 @@ function SecurityNote() {
 function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onClose?: () => void }) {
   return (
     <>
-      <div className="flex items-center justify-between p-6 md:p-8">
+      <div className="flex h-16 shrink-0 items-center justify-between px-5">
         <Brand />
         {onClose && (
           <Button variant="ghost" size="sm" aria-label="Close navigation" onClick={onClose} className="-mr-2 px-2">
@@ -42,10 +44,10 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
           </Button>
         )}
       </div>
-      <Suspense fallback={<nav aria-label="Primary" className="flex flex-1 flex-col gap-1 px-4" />}>
+      <Suspense fallback={<nav aria-label="Primary" className="flex-1" />}>
         <SidebarNav onNavigate={onNavigate} />
       </Suspense>
-      <SecurityNote />
+      <SidebarFooter />
     </>
   );
 }
@@ -53,18 +55,19 @@ function SidebarContent({ onNavigate, onClose }: { onNavigate?: () => void; onCl
 /**
  * Responsive application frame.
  *
- * Desktop (md and up): fixed 260px sidebar, header, scrolling content.
- * Phone: the sidebar becomes a drawer opened from the header's menu button,
- * closed by the overlay, the close button, Escape, or choosing a nav link.
+ * Desktop (lg and up): a fixed sidebar and a sticky header over the content.
+ * Tablet and phone: the sidebar becomes a drawer opened from the header's menu
+ * button, closed by the overlay, the close button, Escape, or choosing a link.
+ * The header carries the tax year picker, so every page shares one year.
  *
- * Everything here is `print:hidden`; the export page's print layout only wants
- * the content.
+ * Everything here is `print:hidden`: a printed report only wants the content.
  */
 export default function AppShell({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // The dev-only sample-data preview has no session, but should look signed in.
+  const pathname = usePathname();
+  const preview = process.env.NODE_ENV !== 'production' && (pathname === '/preview' || pathname.startsWith('/preview/'));
 
-  // Navigating closes the drawer via SidebarNav's onNavigate (see SidebarContent).
-  // Escape closes it too; scrolling the page behind it is disabled while open.
   useEffect(() => {
     if (!drawerOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -81,41 +84,52 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
-      {/* Desktop sidebar */}
-      <aside className={`hidden shrink-0 flex-col border-r border-border bg-bg md:flex ${SIDEBAR_WIDTH} print:hidden`}>
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border bg-card lg:flex print:hidden">
         <SidebarContent />
       </aside>
 
-      {/* Phone drawer */}
       {drawerOpen && (
-        <div className="fixed inset-0 z-50 md:hidden print:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
-          <button type="button" className="absolute inset-0 bg-black/70" aria-label="Close navigation" onClick={() => setDrawerOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 flex w-[280px] max-w-[85vw] animate-slide-in flex-col border-r border-border bg-bg shadow-2xl">
+        <div className="fixed inset-0 z-50 lg:hidden print:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
+          <button type="button" className="absolute inset-0 animate-fade-in bg-scrim" aria-label="Close navigation" onClick={() => setDrawerOpen(false)} />
+          <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] animate-slide-in flex-col border-r border-border bg-card shadow-pop">
             <SidebarContent onNavigate={() => setDrawerOpen(false)} onClose={() => setDrawerOpen(false)} />
           </aside>
         </div>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col bg-surface">
-        <header className="flex h-16 items-center justify-between border-b border-border bg-surface px-4 md:h-[70px] md:px-8 print:hidden">
-          <div className="flex items-center gap-3">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-border bg-bg/85 px-4 backdrop-blur-md md:px-8 print:hidden">
+          <div className="flex min-w-0 items-center gap-2">
             <Button
               variant="ghost"
               size="sm"
-              className="-ml-2 px-2 md:hidden"
+              className="-ml-2 px-2 lg:hidden"
               aria-label="Open navigation"
               aria-expanded={drawerOpen}
               onClick={() => setDrawerOpen(true)}
             >
               <Menu size={22} aria-hidden />
             </Button>
-            <div className="md:hidden">
+            <div className="lg:hidden">
               <Brand />
             </div>
-            <p className="hidden text-sm text-fg-muted md:block">Federal estimate. Not tax advice.</p>
           </div>
 
           <div className="flex items-center gap-3">
+            {preview && (
+              <>
+                <span className="hidden rounded-full bg-warning/10 px-2.5 py-1 text-xs font-semibold text-warning sm:inline">Sample data</span>
+                <Suspense fallback={null}>
+                  <TaxYearSelect />
+                </Suspense>
+              </>
+            )}
+            <Show when="signed-in">
+              <Suspense fallback={<div className="h-10 w-28 rounded-lg bg-card" />}>
+                <TaxYearSelect />
+              </Suspense>
+              <UserButton />
+            </Show>
             <Show when="signed-out">
               <SignInButton mode="modal">
                 <Button variant="primary" size="sm">
@@ -123,14 +137,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
                 </Button>
               </SignInButton>
             </Show>
-            <Show when="signed-in">
-              <UserButton />
-            </Show>
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-8">
-          <Suspense fallback={null}>{children}</Suspense>
+        <main className="flex-1 px-4 pb-16 pt-6 md:px-8 md:pt-8">
+          <div className="mx-auto w-full max-w-6xl">
+            <Suspense fallback={null}>{children}</Suspense>
+          </div>
         </main>
       </div>
     </div>

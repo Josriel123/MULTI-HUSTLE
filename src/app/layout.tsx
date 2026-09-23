@@ -14,8 +14,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: 'Multi-Hustle | Tax & Financial OS',
-  description: 'Real-time net-income tracking and a cited federal tax estimate for multi-earners.',
+  title: 'Multi-Hustle: side-hustle tax estimator',
+  description: 'See what your side hustles owe in federal tax, what is already paid, and what is safe to spend. A cited planning estimate, not tax advice.',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

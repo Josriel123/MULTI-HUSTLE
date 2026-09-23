@@ -109,13 +109,23 @@ export interface TransactionItem {
   incomeSource: IncomeSourceItem | null;
 }
 
+/**
+ * Which hustle a transaction belongs to: an existing one by id, a new one by
+ * name (the server finds it ignoring case, or creates it), or none.
+ */
+export interface HustleRef {
+  incomeSourceId?: string;
+  sourceName?: string;
+  sourceType?: string;
+}
+
 /** `category` alone decides the tax treatment; there is no client-set deductible flag. */
-export interface CreateTransactionInput {
+export interface CreateTransactionInput extends HustleRef {
   amount: string | number;
   type: string;
   description?: string;
+  /** Empty leaves it uncategorised, and the estimate flags it. */
   category: string;
-  sourceName?: string;
   date: string;
 }
 
@@ -124,6 +134,10 @@ export interface UpdateTransactionInput {
   date?: string;
   description?: string;
   category?: string;
+  /** null unassigns the hustle. */
+  incomeSourceId?: string | null;
+  sourceName?: string;
+  sourceType?: string;
 }
 
 /** GET /api/transactions */
@@ -232,6 +246,7 @@ export interface Form1098TResponse {
   form: {
     box1: string | number;
     box5: string | number;
+    restrictedToNonQualifiedExpenses: string | number;
   } | null;
   taxYear: number;
   warnings?: TaxWarning[];
@@ -241,6 +256,8 @@ export interface SaveForm1098TInput {
   taxYear: number;
   box1: string | number;
   box5: string | number;
+  /** Part of box 5 the grant reserves for room, board or travel. Blank means none. */
+  restrictedToNonQualifiedExpenses?: string | number;
 }
 
 /** GET /api/student/form1098 */
@@ -286,6 +303,134 @@ export async function saveForm1098E(input: SaveForm1098EInput): Promise<void> {
       body: JSON.stringify(input),
     }),
   );
+}
+
+// --- Tax profile -----------------------------------------------------------
+
+export interface TaxProfile {
+  filingStatus: string;
+  claimedAsDependent: boolean;
+  spouseItemizes: boolean;
+  /** False until the user saves the profile once; the estimate then assumes single. */
+  saved: boolean;
+}
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+/** GET /api/profile */
+export async function fetchProfile(): Promise<TaxProfile> {
+  return readJson<TaxProfile>(await fetch('/api/profile'));
+}
+
+/** PUT /api/profile */
+export async function saveProfile(input: Omit<TaxProfile, 'saved'>): Promise<TaxProfile> {
+  return readJson<TaxProfile>(await fetch('/api/profile', { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify(input) }));
+}
+
+// --- W-2s ------------------------------------------------------------------
+
+export interface W2Item {
+  id: string;
+  taxYear: number;
+  employer: string;
+  /** Box 1. Money is a two-decimal string throughout. */
+  wages: string;
+  /** Box 2. */
+  federalWithheld: string;
+  /** Box 3. */
+  socialSecurityWages: string;
+  /** Box 7. */
+  socialSecurityTips: string;
+  /** Box 5. */
+  medicareWages: string;
+  /** Box 6. */
+  medicareWithheld: string;
+  /** False: the spouse's W-2 on a joint return. */
+  ownedByTaxpayer: boolean;
+}
+
+export type W2Input = Omit<W2Item, 'id' | 'taxYear'>;
+
+/** GET /api/w2 */
+export async function fetchW2s(taxYear?: number): Promise<{ taxYear: number; forms: W2Item[] }> {
+  return readJson(await fetch(withYear('/api/w2', taxYear)));
+}
+
+/** POST /api/w2 */
+export async function createW2(taxYear: number, input: W2Input): Promise<W2Item> {
+  return readJson<W2Item>(await fetch('/api/w2', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ taxYear, ...input }) }));
+}
+
+/** PATCH /api/w2/[id] */
+export async function updateW2(id: string, input: W2Input): Promise<W2Item> {
+  return readJson<W2Item>(await fetch(`/api/w2/${id}`, { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify(input) }));
+}
+
+/** DELETE /api/w2/[id] */
+export async function deleteW2(id: string): Promise<void> {
+  await readJson<{ success: boolean }>(await fetch(`/api/w2/${id}`, { method: 'DELETE' }));
+}
+
+// --- Estimated payments ----------------------------------------------------
+
+export interface PaymentItem {
+  id: string;
+  taxYear: number;
+  /** YYYY-MM-DD. */
+  paidOn: string;
+  amount: string;
+  note: string | null;
+}
+
+/** GET /api/payments. `total` is summed on the server. */
+export async function fetchPayments(taxYear?: number): Promise<{ taxYear: number; payments: PaymentItem[]; total: string }> {
+  return readJson(await fetch(withYear('/api/payments', taxYear)));
+}
+
+/** POST /api/payments */
+export async function createPayment(input: { taxYear: number; paidOn: string; amount: string; note?: string }): Promise<PaymentItem> {
+  return readJson<PaymentItem>(await fetch('/api/payments', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(input) }));
+}
+
+/** DELETE /api/payments/[id] */
+export async function deletePayment(id: string): Promise<void> {
+  await readJson<{ success: boolean }>(await fetch(`/api/payments/${id}`, { method: 'DELETE' }));
+}
+
+// --- Hustles (income sources) ----------------------------------------------
+
+export interface HustleItem {
+  id: string;
+  name: string;
+  /** "Delivery" | "Freelance" | "Other" */
+  type: string;
+  transactionCount: number;
+  tripCount: number;
+}
+
+/** GET /api/sources */
+export async function fetchHustles(): Promise<HustleItem[]> {
+  const list = await readJson<HustleItem[]>(await fetch('/api/sources'));
+  return Array.isArray(list) ? list : [];
+}
+
+/** POST /api/sources: finds by name (ignoring case) or creates. */
+export async function createHustle(input: { name: string; type: string }): Promise<Pick<HustleItem, 'id' | 'name' | 'type'>> {
+  return readJson(await fetch('/api/sources', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(input) }));
+}
+
+export type HustleUpdateResult =
+  | { merged: false; source: Pick<HustleItem, 'id' | 'name' | 'type'> }
+  | { merged: true; into: Pick<HustleItem, 'id' | 'name' | 'type'>; moved: number; movedTrips: number };
+
+/** PATCH /api/sources/[id]. Renaming to another hustle's name merges the two. */
+export async function updateHustle(id: string, input: { name?: string; type?: string }): Promise<HustleUpdateResult> {
+  return readJson<HustleUpdateResult>(await fetch(`/api/sources/${id}`, { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify(input) }));
+}
+
+/** DELETE /api/sources/[id]. Its transactions stay, unassigned. */
+export async function deleteHustle(id: string): Promise<{ success: boolean; unassigned: number; unassignedTrips: number }> {
+  return readJson(await fetch(`/api/sources/${id}`, { method: 'DELETE' }));
 }
 
 /**

@@ -3,31 +3,75 @@
 /*
  * Design tokens.
  *
- * The palette below is the dark theme the app has shipped with. These custom
- * properties stay the single source of truth: Tailwind utilities alias them
- * through `@theme inline` (so `bg-card` compiles to `var(--bg-card)`), and the
- * print stylesheet at the bottom overrides them for the CPA export. Add a
- * colour here and in `@theme` together, or not at all.
+ * Light by default, dark when the operating system asks for it. Every colour
+ * in the app is one of these custom properties: Tailwind utilities alias them
+ * through `@theme inline` (so `bg-card` compiles to `var(--c-card)`), and the
+ * print block at the bottom resets them for paper. Add a colour here, in the
+ * dark block and in `@theme` together, or not at all; components never type
+ * a colour value.
+ *
+ * Each colour means one thing:
+ *   accent   money in your favour, the primary action, the current page
+ *   danger   destructive actions and errors (not tax owed: owing tax is normal)
+ *   warning  something in the estimate needs checking
+ *   info     connections (Plaid), neutral notes
+ *
+ * Contrast: fg-faint on card and every accent on card clear 4.5:1 in both
+ * themes; on-accent and on-info are the text colours for filled buttons.
  */
 :root {
-  --bg-primary: #000000;
-  --bg-secondary: #0f0f0f;
-  --bg-card: #1c1c1e;
-  --text-primary: #ffffff;
-  --text-secondary: #8e8e93;
-  --text-muted: #636366;
+  color-scheme: light;
 
-  --accent-green: #00c805; /* Robinhood green */
-  --accent-green-dim: rgba(0, 200, 5, 0.15);
+  --c-page: #f5f6f8;
+  --c-surface: #eff1f4;
+  --c-card: #ffffff;
 
-  --accent-red: #ff5000;
-  --accent-blue: #00c8e6;
+  --c-fg: #0f172a;
+  --c-fg-muted: #475569;
+  --c-fg-faint: #64748b;
 
-  --border-color: #333336;
-  --border-strong: #48484a;
-  --border-radius: 12px;
+  --c-accent: #047857;
+  --c-on-accent: #ffffff;
+  --c-danger: #c2410c;
+  --c-warning: #b45309;
+  --c-info: #0369a1;
+  --c-on-info: #ffffff;
 
-  --transition-smooth: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --c-border: #e2e8f0;
+  --c-border-strong: #cbd5e1;
+  --c-scrim: rgba(15, 23, 42, 0.5);
+
+  --c-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --c-shadow-pop: 0 10px 30px -10px rgba(15, 23, 42, 0.25), 0 4px 10px -4px rgba(15, 23, 42, 0.1);
+  --c-radius: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --c-page: #0a0a0b;
+    --c-surface: #111113;
+    --c-card: #1a1a1d;
+
+    --c-fg: #f5f5f7;
+    --c-fg-muted: #a1a1aa;
+    --c-fg-faint: #85858f;
+
+    --c-accent: #22c55e;
+    --c-on-accent: #0a0a0b;
+    --c-danger: #f97316;
+    --c-warning: #fbbf24;
+    --c-info: #38bdf8;
+    --c-on-info: #0a0a0b;
+
+    --c-border: #2a2a2e;
+    --c-border-strong: #3a3a3f;
+    --c-scrim: rgba(0, 0, 0, 0.7);
+
+    --c-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --c-shadow-pop: 0 12px 32px -8px rgba(0, 0, 0, 0.7);
+  }
 }
 
 @theme inline {
@@ -35,34 +79,41 @@
   --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
 
   /* Surfaces */
-  --color-bg: var(--bg-primary);
-  --color-surface: var(--bg-secondary);
-  --color-card: var(--bg-card);
+  --color-bg: var(--c-page);
+  --color-surface: var(--c-surface);
+  --color-card: var(--c-card);
 
   /* Text */
-  --color-fg: var(--text-primary);
-  --color-fg-muted: var(--text-secondary);
-  --color-fg-faint: var(--text-muted);
+  --color-fg: var(--c-fg);
+  --color-fg-muted: var(--c-fg-muted);
+  --color-fg-faint: var(--c-fg-faint);
 
-  /* Accents: one semantic meaning each. */
-  --color-accent: var(--accent-green); /* money in your favour, primary actions, active nav */
-  --color-accent-dim: var(--accent-green-dim);
-  --color-danger: var(--accent-red); /* tax owed, destructive actions, engine notices */
-  --color-info: var(--accent-blue); /* Plaid, disclaimers, informational */
+  /* Accents: one meaning each (see the note above). */
+  --color-accent: var(--c-accent);
+  --color-on-accent: var(--c-on-accent);
+  --color-danger: var(--c-danger);
+  --color-warning: var(--c-warning);
+  --color-info: var(--c-info);
+  --color-on-info: var(--c-on-info);
 
   /* Lines */
-  --color-border: var(--border-color);
-  --color-border-strong: var(--border-strong);
+  --color-border: var(--c-border);
+  --color-border-strong: var(--c-border-strong);
+  /* Behind dialogs and the phone drawer. */
+  --color-scrim: var(--c-scrim);
 
-  --radius-card: var(--border-radius);
+  --radius-card: var(--c-radius);
+  --shadow-card: var(--c-shadow-card);
+  --shadow-pop: var(--c-shadow-pop);
 
-  --animate-slide-up: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-slide-up: slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-slide-in: slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-fade-in: fade-in 0.15s ease-out both;
 
   @keyframes slide-up {
     from {
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateY(8px);
     }
     to {
       opacity: 1;
@@ -78,12 +129,21 @@
       transform: translateX(0);
     }
   }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
 }
 
 @layer base {
   body {
-    background-color: var(--bg-primary);
-    color: var(--text-primary);
+    background-color: var(--c-page);
+    color: var(--c-fg);
     font-family: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -96,7 +156,7 @@
   h5,
   h6 {
     font-weight: 600;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.015em;
   }
 
   a {
@@ -111,83 +171,59 @@
   button:disabled {
     cursor: not-allowed;
   }
-}
 
-/*
- * Legacy classes.
- *
- * Pages not yet converted to the component set (deductions, student, export)
- * still use these. Each converted page should stop needing them; delete a
- * rule here once nothing references it. Do not add to this list.
- */
-@layer components {
-  .card {
-    background-color: var(--bg-card);
-    border-radius: var(--border-radius);
-    padding: 1.5rem;
-    border: 1px solid var(--border-color);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    transition: var(--transition-smooth);
+  :focus-visible {
+    outline: 2px solid var(--c-accent);
+    outline-offset: 2px;
   }
 
-  .card:hover {
-    transform: translateY(-2px);
-    border-color: var(--border-strong);
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
-/* --- CPA exporter print CSS --- */
+/* --- Print: the tax report is meant to be printed or saved as a PDF. --- */
 @media print {
   :root {
-    --bg-primary: white !important;
-    --bg-secondary: #f5f5f5 !important;
-    --bg-card: white !important;
-    --text-primary: #000 !important;
-    --text-secondary: #555 !important;
-    --text-muted: #777 !important;
-    --accent-green: #000 !important;
-    --accent-green-dim: transparent !important;
-    --accent-red: #c00 !important;
-    --border-color: #ccc !important;
+    color-scheme: light;
+    --c-page: #ffffff;
+    --c-surface: #f5f5f5;
+    --c-card: #ffffff;
+    --c-fg: #000000;
+    --c-fg-muted: #333333;
+    --c-fg-faint: #555555;
+    --c-accent: #000000;
+    --c-on-accent: #ffffff;
+    --c-danger: #000000;
+    --c-warning: #000000;
+    --c-info: #000000;
+    --c-border: #bbbbbb;
+    --c-border-strong: #888888;
+    --c-shadow-card: none;
+    --c-shadow-pop: none;
   }
   body {
     background-color: white !important;
     color: black !important;
   }
-  /* App chrome is also marked `print:hidden` in AppShell; this covers the pages' own controls. */
-  .print-hide,
+  /* App chrome is `print:hidden` in AppShell; this covers the pages' own controls. */
   [data-print-hide] {
     display: none !important;
   }
   main {
-    padding: 0.5rem !important;
+    padding: 0 !important;
     overflow: visible !important;
   }
-  .card {
-    background-color: white !important;
-    border: 1px solid #ccc !important;
-    box-shadow: none !important;
-    color: black !important;
+  [data-print-avoid-break] {
     break-inside: avoid;
-    margin-bottom: 20px;
-  }
-  .card:hover {
-    transform: none !important;
-  }
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6,
-  p,
-  span,
-  div,
-  strong {
-    color: black !important;
   }
   * {
-    color-adjust: exact !important;
     -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }

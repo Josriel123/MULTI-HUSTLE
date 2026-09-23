@@ -75,7 +75,7 @@ export function useConfirm(): [(options: ConfirmOptions) => Promise<boolean>, Re
       onClick={(e) => {
         if (e.target === e.currentTarget) settle(false);
       }}
-      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-card border border-border bg-card p-0 text-fg shadow-2xl backdrop:bg-black/75 backdrop:backdrop-blur-sm print:hidden"
+      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl border border-border bg-card p-0 text-fg shadow-pop backdrop:bg-scrim print:hidden"
     >
       {options && (
         <div className="flex flex-col gap-4 p-5 md:p-6">

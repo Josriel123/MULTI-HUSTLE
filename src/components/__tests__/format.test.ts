@@ -70,3 +70,24 @@ describe('labels', () => {
     expect(humanizeSlug('head_of_household')).toBe('Head of household');
   });
 });
+
+describe('formatDollarRate', () => {
+  it('keeps the half cent and always shows cents', async () => {
+    const { formatDollarRate } = await import('../format');
+    expect(formatDollarRate('0.7250')).toBe('$0.725/mi');
+    expect(formatDollarRate('0.7000')).toBe('$0.70/mi');
+    expect(formatDollarRate('0.7600')).toBe('$0.76/mi');
+  });
+});
+
+describe('normalizeMoneyText', () => {
+  it('drops a dollar sign and well-placed thousands separators, and nothing else', async () => {
+    const { normalizeMoneyText } = await import('../moneyText');
+    expect(normalizeMoneyText(' $1,200.50 ')).toBe('1200.50');
+    expect(normalizeMoneyText('12,345,678')).toBe('12345678');
+    expect(normalizeMoneyText('45.10')).toBe('45.10');
+    // Ambiguous: passed through for the server to refuse, never guessed at.
+    expect(normalizeMoneyText('1.200,50')).toBe('1.200,50');
+    expect(normalizeMoneyText('1,20')).toBe('1,20');
+  });
+});

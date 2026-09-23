@@ -1,38 +1,41 @@
 'use client';
 
+import { CalendarDays } from 'lucide-react';
 import { SUPPORTED_TAX_YEARS } from '@/lib/tax/parameters';
-import { Select } from './ui/Field';
-
-export interface TaxYearSelectProps {
-  /** The year currently shown. `undefined` while the first response is loading. */
-  value: number | undefined;
-  onChange: (taxYear: number) => void;
-  id?: string;
-  className?: string;
-}
+import { cn } from './cn';
+import { defaultTaxYear, useTaxYear } from './useTaxYear';
 
 /**
- * Picks the tax year the page is looking at. The list is the engine's own
- * `SUPPORTED_TAX_YEARS`, so the UI can never offer a year the API rejects.
+ * The tax year every page is looking at, in the header. The list is the
+ * engine's own `SUPPORTED_TAX_YEARS`, so it can never offer a year the API
+ * rejects; the choice lives in the URL (useTaxYear), so it survives
+ * navigation and reloads.
  */
-export function TaxYearSelect({ value, onChange, id = 'tax-year', className }: TaxYearSelectProps) {
+export function TaxYearSelect({ className }: { className?: string }) {
+  const [taxYear, setTaxYear] = useTaxYear();
+  const shown = taxYear ?? defaultTaxYear();
   return (
-    <label className={className}>
-      <span className="sr-only">Tax year</span>
-      <Select
-        id={id}
+    <label
+      className={cn(
+        'relative flex h-10 items-center gap-2 rounded-lg border border-border bg-card pl-3 pr-2 text-sm shadow-card hover:border-border-strong',
+        'focus-within:ring-2 focus-within:ring-accent',
+        className,
+      )}
+    >
+      <CalendarDays size={16} className="hidden text-fg-faint min-[400px]:block" aria-hidden />
+      <span className="hidden text-fg-muted sm:inline">Tax year</span>
+      <select
         aria-label="Tax year"
-        value={value ?? ''}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="h-11 w-auto min-w-[9rem] pr-8 text-sm font-medium"
+        value={shown}
+        onChange={(e) => setTaxYear(Number(e.target.value))}
+        className="cursor-pointer appearance-auto bg-transparent pr-1 font-semibold text-fg focus:outline-none"
       >
-        {value === undefined && <option value="">Tax year…</option>}
         {SUPPORTED_TAX_YEARS.map((year) => (
           <option key={year} value={year}>
-            Tax year {year}
+            {year}
           </option>
         ))}
-      </Select>
+      </select>
     </label>
   );
 }

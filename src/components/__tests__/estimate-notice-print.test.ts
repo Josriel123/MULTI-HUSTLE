@@ -49,8 +49,8 @@ describe('EstimateNotice prints its collapsed lists', () => {
 
   it('the print copies keep their headings, with the counts', () => {
     const [assumptions, notModeled] = printCopies(render());
-    expect(assumptions).toContain('Assumptions this estimate makes (2)');
-    expect(notModeled).toContain('Tax items not modeled by this engine (3)');
+    expect(assumptions).toContain('What this estimate assumes (2)');
+    expect(notModeled).toContain('What it leaves out (3)');
   });
 
   it('hides the print copies on screen and the <details> in print', () => {
