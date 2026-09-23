@@ -100,3 +100,15 @@ describe('F8: an office larger than the home is refused before it is stored', ()
     expect(bad.ok).toBe(false);
   });
 });
+
+describe('a third decimal place is refused, not rounded away by the column', () => {
+  it('refuses 12.345 and names the field', () => {
+    const r = parseMoneyInput('12.345', 'Amount');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('Amount can have at most two decimal places.');
+  });
+
+  it('accepts two decimals, one, none, and trailing zeros that change nothing', () => {
+    for (const v of ['12.34', '12.3', '12', '12.340']) expect(parseMoneyInput(v, 'Amount').ok).toBe(true);
+  });
+});

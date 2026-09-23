@@ -202,6 +202,11 @@ function emptyBucket(): SourceBucket {
   return { income: ZERO, deductibleExpenses: ZERO, vehicleExpenses: ZERO };
 }
 
+/** "1 deposit has", "3 deposits have": messages are read by people, so no "deposit(s)". */
+function count(n: number, one: string, many: string = `${one}s`): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
 /** Sum of optional amounts; missing and null are zero. */
 function sumOf(rows: readonly W2FormRow[], pick: (row: W2FormRow) => MoneyInput | null | undefined, field: string): Money {
   return rows.reduce<Money>((total, row, index) => {
@@ -326,8 +331,8 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
           warnings.push({
             code: 'category_mismatch',
             message: isExpenseCategory(row.category)
-              ? `An income transaction is tagged with the expense category ${JSON.stringify(row.category)}; it was treated as uncategorised.`
-              : `An income transaction is tagged ${JSON.stringify(row.category)}, which is not a known income category; it was treated as uncategorised. Re-categorise it.`,
+              ? `An income transaction is tagged with the expense category ${JSON.stringify(row.category)}; it was treated as uncategorized.`
+              : `An income transaction is tagged ${JSON.stringify(row.category)}, which is not a known income category; it was treated as uncategorized. Choose a category for it.`,
             amount: amount.toFixed(2),
           });
         }
@@ -369,8 +374,8 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
           warnings.push({
             code: 'category_mismatch',
             message: isIncomeCategory(row.category)
-              ? `An expense transaction is tagged with the income category ${JSON.stringify(row.category)}; it was treated as uncategorised (personal).`
-              : `An expense transaction is tagged ${JSON.stringify(row.category)}, which is not a known expense category; it was treated as uncategorised (personal). Re-categorise it.`,
+              ? `An expense transaction is tagged with the income category ${JSON.stringify(row.category)}; it was treated as uncategorized (personal).`
+              : `An expense transaction is tagged ${JSON.stringify(row.category)}, which is not a known expense category; it was treated as uncategorized (personal). Choose a category for it.`,
             amount: amount.toFixed(2),
           });
         }
@@ -421,7 +426,7 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
   if (!jointReturn && spouseW2s.length > 0) {
     warnings.push({
       code: 'spouse_w2_not_on_this_return',
-      message: `${spouseW2s.length} W-2(s) marked as your spouse's were left out: a spouse's wages are only on your return when you file jointly. Change your filing status, or mark the W-2 as yours if it is.`,
+      message: `${spouseW2s.length === 1 ? "A W-2 marked as your spouse's was" : `${spouseW2s.length} W-2s marked as your spouse's were`} left out: a spouse's wages are only on your return when you file jointly. Change your filing status, or mark the W-2 as yours if it is.`,
       amount: sumOf(spouseW2s, (r) => r.wages, 'wages').toFixed(2),
     });
   }
@@ -444,14 +449,14 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
   if (uncategorisedIncomeCount > 0) {
     warnings.push({
       code: 'uncategorised_income',
-      message: `${uncategorisedIncomeCount} deposit(s) have no tax category and were counted as business income subject to self-employment tax. If any are loans, transfers, refunds, paychecks or investment sales, categorise them: the estimate will fall.`,
+      message: `${count(uncategorisedIncomeCount, 'deposit')} ${uncategorisedIncomeCount === 1 ? 'has' : 'have'} no category, so ${uncategorisedIncomeCount === 1 ? 'it was' : 'they were'} counted as business income subject to self-employment tax. If any are loans, transfers, refunds, paychecks or investment sales, choose that category and the estimate will fall.`,
       amount: uncategorisedIncomeTotal.toFixed(2),
     });
   }
   if (uncategorisedExpenseCount > 0) {
     warnings.push({
       code: 'uncategorised_expenses',
-      message: `${uncategorisedExpenseCount} expense(s) have no tax category and were treated as personal, so nothing was deducted for them. Categorise any that are business costs: the estimate will fall.`,
+      message: `${count(uncategorisedExpenseCount, 'expense')} ${uncategorisedExpenseCount === 1 ? 'has' : 'have'} no category, so ${uncategorisedExpenseCount === 1 ? 'it was' : 'they were'} treated as personal and nothing was deducted. Choose a business category for any that are business costs and the estimate will fall.`,
       amount: uncategorisedExpenseTotal.toFixed(2),
     });
   }
@@ -460,13 +465,13 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
     if (entry.category === 'w2_paycheck' && returnW2s.length > 0) {
       // Expected and correct once the W-2 is on file: the deposits are left
       // out because the W-2's boxes already carry those wages.
-      assumptions.push(`${entry.count} paycheck deposit(s) were left out of income on purpose; wages come from the ${returnW2s.length} W-2(s) entered.`);
+      assumptions.push(`${count(entry.count, 'paycheck deposit')} ${entry.count === 1 ? 'was' : 'were'} left out of income on purpose; wages come from the ${count(returnW2s.length, 'W-2')} entered.`);
       continue;
     }
     if (entry.category === 'w2_paycheck') {
       warnings.push({
         code: 'paychecks_without_w2',
-        message: `${entry.count} deposit(s) are paychecks, but no W-2 is entered for ${args.taxYear}, so those wages and the tax already withheld from them are missing from the estimate. Add the W-2, or your latest pay stub's year-to-date figures.`,
+        message: `${count(entry.count, 'deposit')} ${entry.count === 1 ? 'is a paycheck' : 'are paychecks'}, but no W-2 is entered for ${args.taxYear}, so those wages and the tax already withheld from them are missing from the estimate. Add the W-2, or your latest pay stub's year-to-date figures.`,
         amount: entry.total.toFixed(2),
       });
       continue;
@@ -474,7 +479,7 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
     if (def.treatment === 'excluded_not_modeled') {
       warnings.push({
         code: `excluded_not_modeled_${entry.category}`,
-        message: `${entry.count} deposit(s) categorised as "${def.label}" were left out. ${def.citation.note ?? ''}`.trim(),
+        message: `${count(entry.count, 'deposit')} categorized as "${def.label}" ${entry.count === 1 ? 'was' : 'were'} left out. ${def.citation.note ?? ''}`.trim(),
         amount: entry.total.toFixed(2),
       });
     }
@@ -484,7 +489,7 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
       // row, so the deduction is left as entered and the user is told.
       warnings.push({
         code: 'refund_not_netted',
-        message: `${entry.count} refund deposit(s) were excluded from income but did not reduce any deducted expense. If a refund reverses a business purchase deducted here, reduce that expense; otherwise the deduction is overstated (Pub. 525, recovery in the same year).`,
+        message: `${count(entry.count, 'refund deposit')} ${entry.count === 1 ? 'was' : 'were'} excluded from income but did not reduce any deducted expense. If a refund reverses a business purchase deducted here, reduce that expense; otherwise the deduction is overstated (Pub. 525, recovery in the same year).`,
         amount: entry.total.toFixed(2),
       });
     }

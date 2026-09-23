@@ -188,7 +188,7 @@ describe('paycheck deposits and W-2s', () => {
     const codes = built.warnings.map((w) => w.code);
     expect(codes).not.toContain('paychecks_without_w2');
     expect(codes).not.toContain('excluded_not_modeled_w2_paycheck');
-    expect(built.assumptions.join(' ')).toContain('paycheck deposit(s) were left out of income on purpose');
+    expect(built.assumptions.join(' ')).toContain('1 paycheck deposit was left out of income on purpose');
     // The deposit itself is still not income.
     expectMoney(money(built.input.scheduleC.grossReceipts), '0.00');
   });

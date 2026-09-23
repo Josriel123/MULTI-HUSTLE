@@ -58,8 +58,8 @@ export function computeStandardMileageDeduction(miles: MoneyInput, isoDate: stri
     period,
     deduction,
     lines: [
-      { ref: 'Schedule C Part IV line 44a', label: 'Business miles', value: m },
-      { ref: period.citation.label, label: `Rate per mile (${period.from} to ${period.to})`, value: ratePerMile },
+      { ref: 'Schedule C Part IV line 44a', label: 'Business miles', value: m, unit: 'miles' },
+      { ref: period.citation.label, label: `Rate per mile (${period.from} to ${period.to})`, value: ratePerMile, unit: 'usd_per_mile' },
       { ref: 'Schedule C line 9', label: 'Standard mileage deduction', value: deduction },
     ],
     citations: [period.citation, MILEAGE_CITATIONS.authority, MILEAGE_CITATIONS.substantiation],

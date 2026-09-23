@@ -35,10 +35,32 @@ describe('summaryPayload', () => {
     expect(e.income.wages).toBe(24000);
   });
 
+  it('splits the balance into left-to-pay and refund, never negative, with the share already paid', () => {
+    const { summary } = payload;
+    if (summary.balanceDue >= 0) {
+      expect(summary.leftToPay).toBe(summary.balanceDue);
+      expect(summary.refund).toBe(0);
+    } else {
+      expect(summary.leftToPay).toBe(0);
+      expect(summary.refund).toBe(-summary.balanceDue);
+    }
+    expect(summary.paidShare).toBeGreaterThan(0);
+    expect(summary.paidShare).toBeLessThanOrEqual(1);
+
+    // Overpaid: a refund, and the bar is simply full.
+    const overpaid = summaryPayload({ ...rows, estimatedPayments: [{ taxYear: 2025, amount: '50000.00', paidOn: d('2025-04-15') }] });
+    expect(overpaid.summary.leftToPay).toBe(0);
+    expect(overpaid.summary.refund).toBeGreaterThan(0);
+    expect(overpaid.summary.paidShare).toBe(1);
+
+    // No tax at all: nothing to divide by.
+    expect(summaryPayload({ taxYear: 2025, transactions: [] }).summary.paidShare).toBeNull();
+  });
+
   it('groups income by hustle for the overview', () => {
     expect(payload.incomeBySource).toEqual([
-      { name: 'DoorDash', type: 'Delivery', income: 12000, count: 1 },
-      { name: 'Web design', type: 'Freelance', income: 8000, count: 1 },
+      { name: 'DoorDash', type: 'Delivery', income: 12000, count: 1, share: 0.6 },
+      { name: 'Web design', type: 'Freelance', income: 8000, count: 1, share: 0.4 },
     ]);
   });
 
@@ -68,7 +90,7 @@ describe('summaryPayload', () => {
 });
 
 describe('chartPayload', () => {
-  const chart = chartPayload(rows);
+  const chart = chartPayload(rows, d('2026-09-23'));
   const summary = summaryPayload(rows);
 
   it('has twelve cumulative months, and December is exactly the summary', () => {
@@ -89,5 +111,22 @@ describe('chartPayload', () => {
 
   it('is cumulative: total income never falls from one month to the next', () => {
     for (let i = 1; i < 12; i++) expect(chart.points[i].gross).toBeGreaterThanOrEqual(chart.points[i - 1].gross);
+  });
+
+  it('stops the current year at the current month, spreading a year-to-date W-2 over the months so far', () => {
+    const thisYear: EstimateInputRows = {
+      taxYear: 2026,
+      transactions: [{ amount: '900.00', type: 'Income', date: d('2026-02-02'), category: 'business_income', incomeSource: null }],
+      w2Forms: [{ taxYear: 2026, wages: '9000.00', socialSecurityWages: '9000.00', medicareWages: '9000.00' }],
+    };
+    const mid = chartPayload(thisYear, d('2026-03-20'));
+    expect(mid.points.map((p) => p.month)).toEqual(['Jan', 'Feb', 'Mar']);
+    // 9,000 of year-to-date wages over three months is 3,000 a month.
+    expect(mid.points[0].gross).toBe(3000);
+    expect(mid.points[1].gross).toBe(6900);
+    // The last point is everything: the summary's figure.
+    expect(mid.points[2].gross).toBe(summaryPayload(thisYear).summary.gross);
+    // A year that has not started yet shows one point.
+    expect(chartPayload(thisYear, d('2025-12-01')).points).toHaveLength(1);
   });
 });

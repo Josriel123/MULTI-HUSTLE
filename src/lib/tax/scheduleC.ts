@@ -320,7 +320,7 @@ export function computeScheduleC(input: ScheduleCInput, params?: TaxYearParamete
       .map((l) => ({ ref: `Schedule C line ${l.scheduleCLine}`, label: EXPENSE_CATEGORIES[l.category].label, value: l.deductible })),
     ...(trips.length > 0
       ? [
-          { ref: 'Schedule C Part IV line 44a', label: `Business miles logged (${trips.length} trip${trips.length === 1 ? '' : 's'})`, value: totalMiles },
+          { ref: 'Schedule C Part IV line 44a', label: `Business miles logged (${trips.length} trip${trips.length === 1 ? '' : 's'})`, value: totalMiles, unit: 'miles' as const },
           ...mileagePeriodLines,
           { ref: 'Schedule C line 9', label: 'Standard mileage rate deduction', value: mileageDeduction },
         ]

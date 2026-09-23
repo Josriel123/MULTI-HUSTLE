@@ -51,4 +51,13 @@ export interface Line {
   ref: string;
   label: string;
   value: Money;
+  /**
+   * What `value` measures, when it is not dollars: square feet, a fraction
+   * (0.12 for 12%), miles, or dollars per mile. Absent means dollars. Lets a
+   * line-by-line display format every line correctly without guessing from
+   * the label.
+   */
+  unit?: LineUnit;
 }
+
+export type LineUnit = 'usd' | 'fraction' | 'sqft' | 'miles' | 'usd_per_mile';

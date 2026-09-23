@@ -145,7 +145,7 @@ export async function POST() {
           // "Food and Drink" or "Shops" as tax-deductible, which flags
           // groceries as a business expense and understates tax owed.
           // Real categorisation lands with the tax engine (Phase 2); until
-          // then the user marks deductions explicitly in /deductions.
+          // then the user categorises each row on /transactions.
           taxDeductible: false,
         },
       });

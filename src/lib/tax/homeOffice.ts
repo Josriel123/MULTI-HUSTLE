@@ -184,9 +184,9 @@ export function computeHomeOffice(input: HomeOfficeInput, tentativeProfit: Money
   }
 
   const lines: Line[] = [
-    { ref: 'Form 8829 line 1', label: 'Area used regularly and exclusively for business (sq ft)', value: officeSqFt },
-    { ref: 'Form 8829 line 2', label: 'Total area of home (sq ft)', value: totalSqFt },
-    { ref: 'Form 8829 line 7', label: 'Business percentage', value: businessPct },
+    { ref: 'Form 8829 line 1', label: 'Area used regularly and exclusively for business (sq ft)', value: officeSqFt, unit: 'sqft' },
+    { ref: 'Form 8829 line 2', label: 'Total area of home (sq ft)', value: totalSqFt, unit: 'sqft' },
+    { ref: 'Form 8829 line 7', label: 'Business percentage', value: businessPct, unit: 'fraction' },
     { ref: 'Form 8829 line 8', label: 'Gross income limit (Schedule C line 29)', value: grossIncomeLimit },
     { ref: 'Form 8829 lines 18-19 col (b)', label: `Rent and utilities, ${monthsUsed} months`, value: annualCosts },
     { ref: 'Form 8829 regular method', label: 'Business share of home costs before limit', value: regularBefore },

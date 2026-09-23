@@ -157,7 +157,7 @@ export function computeQbiDeduction(input: QbiInput, params: TaxYearParameters):
     { ref: 'Form 8995 line 1(c)', label: 'Qualified business income (net profit less 1/2 SE tax deduction)', value: qbi },
     { ref: 'Form 8995 line 5', label: 'QBI component: 20% of QBI', value: tentative },
     { ref: '§199A(b)(3)(B) threshold', label: 'Threshold amount', value: threshold },
-    { ref: '§199A(b)(3)(B) phase-in', label: 'Phase-in ratio (excess / range)', value: ratio },
+    { ref: '§199A(b)(3)(B) phase-in', label: 'Phase-in ratio (excess / range)', value: ratio, unit: 'fraction' },
     { ref: 'Form 8995 line 10', label: 'QBI component after phase-in', value: afterPhaseIn },
     { ref: 'Form 8995 line 11', label: 'Taxable income before QBI deduction', value: tiBefore },
     { ref: 'Form 8995 line 12', label: 'Net capital gain', value: netCapGain },

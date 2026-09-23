@@ -59,6 +59,12 @@ export function parseMoneyInput(value: unknown, field: string): ParsedMoney {
     };
   }
 
+  // The column keeps two decimals and Postgres would round a third away
+  // without a word, the same silent rewrite as the others above.
+  if (decimal.decimalPlaces() > 2) {
+    return { ok: false, error: `${field} can have at most two decimal places.` };
+  }
+
   return { ok: true, value: decimal };
 }
 

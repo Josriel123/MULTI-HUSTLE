@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { requireUser } from '@/lib/user';
 import { resolveTaxYear } from '@/lib/taxYear';
+import { parseDateInput } from '@/lib/validation';
 import {
   computeStandardMileageDeduction,
   getTaxYearParameters,
@@ -110,9 +111,8 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { date, miles, purpose, incomeSourceId } = body;
 
-    if (!date || isNaN(new Date(date).getTime())) {
-      return NextResponse.json({ error: 'A valid date is required.' }, { status: 400 });
-    }
+    const parsedDate = parseDateInput(date, 'Trip date');
+    if (!parsedDate.ok) return NextResponse.json({ error: parsedDate.error }, { status: 400 });
 
     if (miles === undefined || miles === null || String(miles).trim() === '') {
       return NextResponse.json({ error: 'Miles driven is required.' }, { status: 400 });
@@ -123,6 +123,10 @@ export async function POST(req: Request) {
       decimalMiles = new Prisma.Decimal(miles);
       if (decimalMiles.isNegative() || decimalMiles.isZero()) {
         return NextResponse.json({ error: 'Miles driven must be greater than zero.' }, { status: 400 });
+      }
+      // DECIMAL(10,2): refuse what the column would reject or round.
+      if (decimalMiles.greaterThan('99999999.99') || decimalMiles.decimalPlaces() > 2) {
+        return NextResponse.json({ error: 'Miles driven must be a number with at most two decimal places.' }, { status: 400 });
       }
     } catch {
       return NextResponse.json({ error: 'Invalid decimal value for miles.' }, { status: 400 });
@@ -137,7 +141,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const tripDate = new Date(date);
+    const tripDate = parsedDate.value;
     const isoDate = tripDate.toISOString().slice(0, 10);
     const tripYear = tripDate.getUTCFullYear();
     const yearForPricing = isSupportedTaxYear(tripYear) ? tripYear : latestSupportedTaxYear();
