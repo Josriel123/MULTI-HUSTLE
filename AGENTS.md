@@ -58,12 +58,16 @@ everything outside its markers alone.
     and browser-storage keys, or how long data is kept updates the Privacy or
     Cookie Policy in the same commit; if it matters to users, bump
     `LEGAL.agreementVersion` and add a line to `docs/legal-changelog.md`, and
-    everyone is asked to agree again. (D39, D40, D42)
+    everyone is asked to agree again. `legal-version.test.ts` fails on any
+    edit to the Terms or Privacy Policy until that choice is made. (D39, D40,
+    D42, D51)
 15. **Nothing non-essential without an opt-in.** No analytics, ads, trackers
     or third-party widgets that set cookies or read storage until the person
-    has said yes; then the Cookie Policy and the notice change first. No
-    marketing email without consent, an unsubscribe link and a postal address
-    (CAN-SPAM). (D42)
+    has said yes; then the Cookie Policy and the notice change first. That
+    includes what an SDK does by itself (Clerk's telemetry is off). Nothing
+    loads a third party before the person asks for it (Plaid waits for
+    "Connect a bank"). No marketing email without consent, an unsubscribe link
+    and a postal address (CAN-SPAM). (D41, D42)
 16. **Claim only what the code does.** No testimonials, ratings, user
     counts, urgency, "bank-level" or "guaranteed"; state limits as plainly as
     features; never imply IRS affiliation or that the estimate is advice or a

@@ -115,15 +115,19 @@ function TransactionForm({
   const [initial] = useState<FormState>(() => initialState(mode, taxYear));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Shown at the category itself (WCAG 3.3.1), not only in the status line below the form.
+  const [categoryError, setCategoryError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const editing = mode.kind === 'edit' ? mode.transaction : null;
   const locked = Boolean(editing?.plaidTransactionId);
 
   async function save(addAnother: boolean) {
     setError(null);
+    setCategoryError(null);
     setSaved(null);
     if (!form.category) {
-      setError('Choose a category: it decides how this is taxed.');
+      setCategoryError('Choose a category: it decides how this is taxed.');
+      document.getElementById('tx-category')?.focus();
       return;
     }
     if (form.hustle.mode === 'new' && form.hustle.name.trim() === '') {
@@ -243,6 +247,7 @@ function TransactionForm({
       <Field
         htmlFor="tx-category"
         label="Category"
+        error={categoryError}
         hint={
           editing?.category && !form.category
             ? `Was "${categoryLabel(editing.category)}", which is no longer a category. Choose one.`
@@ -256,7 +261,12 @@ function TransactionForm({
           type={form.type}
           allowEmpty={form.category === ''}
           value={form.category}
-          onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+          aria-invalid={categoryError ? true : undefined}
+          aria-describedby={categoryError ? 'tx-category-error' : 'tx-category-hint'}
+          onChange={(e) => {
+            setCategoryError(null);
+            setForm((f) => ({ ...f, category: e.target.value }));
+          }}
         />
       </Field>
 

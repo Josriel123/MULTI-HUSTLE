@@ -11,7 +11,7 @@ const STORAGE = [
   { name: 'multi-hustle:cookie-notice', purpose: 'Remembers that you have seen the cookie notice, so it does not keep appearing.' },
   { name: 'multi-hustle:tour', purpose: 'Remembers that you have finished or skipped the guided tour.' },
   { name: 'multi-hustle:setup-hidden', purpose: 'Remembers that you hid the setup checklist on the Overview.' },
-  { name: 'multi-hustle:underage', purpose: 'Remembers, on this device, an answer that you are under 18, so the age question is not asked again.' },
+  { name: 'multi-hustle:underage', purpose: 'Remembers, on this device, an answer that someone is under 18, so sign-up stays closed here. It holds no name or account.' },
 ];
 
 /**
@@ -55,7 +55,7 @@ export default function CookiePolicyPage() {
                 If you connect a bank, Plaid&rsquo;s connection window runs Plaid&rsquo;s own code, which may use cookies on Plaid&rsquo;s domain for
                 security and fraud prevention, under{' '}
                 <PolicyLink href="https://plaid.com/legal/#end-user-privacy-policy">Plaid&rsquo;s End User Privacy Policy</PolicyLink>. Nothing from Plaid
-                is loaded unless you choose to connect a bank.
+                is loaded, and Plaid is not contacted, until you press &ldquo;Connect a bank&rdquo;.
               </p>
             </>
           ),

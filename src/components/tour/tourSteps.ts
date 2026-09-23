@@ -39,7 +39,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     target: 'nav-/mileage',
     drawer: true,
     title: 'Mileage',
-    body: 'Drive for a gig or to meet clients? Log each trip here. Every business mile lowers your tax.',
+    body: 'Drive for a gig or to meet clients? Log each trip here. Business miles can lower your taxable profit.',
   },
   {
     id: 'jobs',
@@ -60,7 +60,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     target: 'nav-/office',
     drawer: true,
     title: 'Home office',
-    body: 'Work on your hustle from a room at home? Part of your rent and utilities can come off your profit.',
+    body: 'Use part of your home regularly and only for your hustle? Part of your rent and utilities may come off your profit.',
   },
   {
     id: 'education',

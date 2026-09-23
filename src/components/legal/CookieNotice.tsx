@@ -1,6 +1,6 @@
 'use client';
 
-import { useSyncExternalStore } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { Cookie } from 'lucide-react';
 import { Button } from '../ui/Button';
@@ -55,9 +55,37 @@ export function CookieNotice() {
   // server cannot read localStorage), so it never flashes for someone who
   // already said OK; a first-time visitor sees it slide in just after.
   const done = useSyncExternalStore(subscribe, acknowledged, () => true);
+  const ref = useRef<HTMLElement>(null);
+
+  // While it floats over the page, reserve its height at the bottom: focus
+  // scrolling stops short of it (scroll-padding) and the end of the page can
+  // scroll clear of it (body padding), so it never hides what has focus
+  // (WCAG 2.4.11).
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const update = () => {
+      const covered = Math.max(0, Math.ceil(window.innerHeight - el.getBoundingClientRect().top) + 8);
+      root.style.scrollPaddingBottom = `${covered}px`;
+      root.style.setProperty('--mh-cookie-notice', `${covered}px`);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    window.addEventListener('resize', update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+      root.style.scrollPaddingBottom = '';
+      root.style.removeProperty('--mh-cookie-notice');
+    };
+  }, [done]);
+
   if (done) return null;
   return (
     <section
+      ref={ref}
       aria-label="Cookie notice"
       // Clears the phone's bottom tab bar (globals.css sets --mh-bottom-nav while it shows) and the home indicator.
       className="fixed inset-x-3 bottom-[calc(0.75rem+var(--mh-bottom-nav,0px)+env(safe-area-inset-bottom,0px))] z-40 animate-slide-up rounded-2xl border border-border bg-card p-4 shadow-pop sm:left-auto sm:right-4 sm:w-[26rem] print:hidden"

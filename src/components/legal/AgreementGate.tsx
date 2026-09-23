@@ -10,27 +10,10 @@ import { useLoad } from '../useLoad';
 import { Button } from '../ui/Button';
 import { Checkbox } from '../ui/Field';
 import { InlineStatus } from '../ui/InlineStatus';
+import { afterDeletionUrl } from './deletion';
+import { readUnderage, rememberUnderage } from './underage';
 
 const loadAccount = () => fetchAccount();
-
-// Once someone says they are under 18 on this device, the answer sticks: the
-// FTC's COPPA guidance is that an age screen should not let a child simply go
-// back and give a different answer.
-const UNDERAGE_KEY = 'multi-hustle:underage';
-function readUnderage(): boolean {
-  try {
-    return window.localStorage.getItem(UNDERAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-function rememberUnderage() {
-  try {
-    window.localStorage.setItem(UNDERAGE_KEY, '1');
-  } catch {
-    // Storage blocked: the screen still switches for this visit.
-  }
-}
 
 /**
  * Nothing in the app until the person has, themselves, ticked "I am 18 or
@@ -62,7 +45,7 @@ export function AgreementGate({ children }: { children: ReactNode }) {
           </Button>
         </div>
       ) : (
-        <Loader2 size={24} className="animate-spin text-fg-faint" aria-label="Loading your account" />
+        <Loader2 size={24} className="animate-spin text-fg-faint" role="img" aria-label="Loading your account" />
       )}
     </div>
   );
@@ -75,9 +58,11 @@ export function AgreementScreen({ status, onAccepted }: { status: AgreementStatu
   const [agree, setAgree] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [underage, setUnderage] = useState(readUnderage);
-  const [deleting, setDeleting] = useState(false);
   const returning = status.acceptedVersion !== null;
+  // A device that already answered "under 18" shows that screen again, for a
+  // new account; someone returning for new terms confirmed their age before.
+  const [underage, setUnderage] = useState(() => !returning && readUnderage());
+  const [deleting, setDeleting] = useState(false);
 
   const submit = useCallback(
     async (e: FormEvent) => {
@@ -102,15 +87,23 @@ export function AgreementScreen({ status, onAccepted }: { status: AgreementStatu
     setDeleting(true);
     setError(null);
     try {
-      await deleteAccount();
-      // If Clerk cannot sign out a user it has just deleted, load the page
-      // afresh (replace, so Back cannot return to the deleted account) rather
-      // than routing client-side with signed-in state still in memory.
-      await clerk.signOut({ redirectUrl: '/welcome?deleted=1' }).catch(() => window.location.replace('/welcome?deleted=1'));
+      const destination = afterDeletionUrl(await deleteAccount(), 'underage');
+      // Sign out, then load the next page afresh whatever Clerk did: it may
+      // reject, or resolve without navigating when the user it just deleted
+      // has no session left. Replace, so Back cannot return to the account.
+      await clerk.signOut({ redirectUrl: destination }).catch(() => undefined);
+      window.location.replace(destination);
     } catch (err) {
       setError(errorText(err, 'Could not delete the account. Please try again, or write to us.'));
       setDeleting(false);
     }
+  }
+
+  /** "I'm under 18": the account goes at once, on the server, not only when a second button is pressed. */
+  function declareUnderage() {
+    rememberUnderage();
+    setUnderage(true);
+    void removeAccount();
   }
 
   return (
@@ -127,20 +120,22 @@ export function AgreementScreen({ status, onAccepted }: { status: AgreementStatu
         </div>
 
         {underage ? (
-          <div className="mt-5 flex flex-col gap-4">
+          <div className="mt-5 flex flex-col gap-4" role="status">
             <p className="text-[0.95rem] leading-relaxed text-fg-muted">
-              Thanks for being honest. {LEGAL.appName} is only for people {LEGAL.minimumAge} and older, so you can&rsquo;t use it yet. We can delete the
-              account you just made right now, and we will not keep anything about you.
+              Thanks for being honest. {LEGAL.appName} is only for people {LEGAL.minimumAge} and older, so you can&rsquo;t use it yet.{' '}
+              {deleting
+                ? 'We are deleting the account you just made, and will keep nothing about you.'
+                : 'Delete the account you just made, and we will keep nothing about you.'}
             </p>
             {error && <InlineStatus kind="error">{error}</InlineStatus>}
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button variant="danger" loading={deleting} onClick={() => void removeAccount()}>
-                Delete my account
-              </Button>
-              <SignOutButton redirectUrl="/welcome">
-                <Button variant="ghost">Sign out</Button>
-              </SignOutButton>
-            </div>
+            {!deleting && (
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button variant="danger" onClick={() => void removeAccount()}>
+                  Delete my account
+                </Button>
+              </div>
+            )}
+            {deleting && <Loader2 size={20} className="animate-spin text-fg-faint" role="img" aria-label="Deleting your account" />}
             <p className="text-sm text-fg-muted">
               Made a mistake? Write to{' '}
               <a href={`mailto:${LEGAL.contactEmail}`} className="font-medium text-accent hover:underline">
@@ -182,16 +177,18 @@ export function AgreementScreen({ status, onAccepted }: { status: AgreementStatu
               Agree and continue
             </Button>
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4 text-sm">
-              <button
-                type="button"
-                className="font-medium text-fg-muted underline-offset-2 hover:text-fg hover:underline"
-                onClick={() => {
-                  rememberUnderage();
-                  setUnderage(true);
-                }}
-              >
-                I&rsquo;m under {LEGAL.minimumAge}
-              </button>
+              {/* Only a new account is asked: someone returning for new terms already confirmed their age. */}
+              {returning ? (
+                <span />
+              ) : (
+                <button
+                  type="button"
+                  className="font-medium text-fg-muted underline-offset-2 hover:text-fg hover:underline"
+                  onClick={declareUnderage}
+                >
+                  I&rsquo;m under {LEGAL.minimumAge}
+                </button>
+              )}
               <SignOutButton redirectUrl="/welcome">
                 <button type="button" className="font-medium text-fg-muted underline-offset-2 hover:text-fg hover:underline">
                   Sign out

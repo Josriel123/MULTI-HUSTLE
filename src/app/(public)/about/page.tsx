@@ -22,7 +22,7 @@ export default function AboutPage() {
     ],
     ['Postal address', LEGAL.mailingAddress ?? 'Available on request by email'],
     ['Price', 'Free: no fees, subscriptions or ads'],
-    ['Replies', `Within ${LEGAL.responseDays} days (privacy requests), five business days (accessibility)`],
+    ['Replies', `Within ${LEGAL.responseDays} days for privacy requests; we aim for five business days on accessibility`],
   ];
   return (
     <div className="mx-auto max-w-3xl">
@@ -30,8 +30,8 @@ export default function AboutPage() {
       <div className="mt-4 flex flex-col gap-3 text-[0.95rem] leading-relaxed text-fg-muted">
         <p>
           {LEGAL.appName} helps people with gig, freelance and side income see what they are likely to owe in federal tax, how much of it is already
-          paid, and how much of their money is safe to spend. It applies the IRS&rsquo;s published figures for each tax year to what you enter, and every
-          line of the estimate names the form line it comes from.
+          paid, and how much of their money is safe to spend. It applies the IRS&rsquo;s published figures for each tax year to what you enter, and the
+          tax report shows the form line each figure belongs on.
         </p>
         <p>
           It is a planning tool made by one person. It is not a tax preparer, does not file returns or send payments, and is not affiliated with or

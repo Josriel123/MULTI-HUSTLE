@@ -91,10 +91,10 @@ page padding of their own. Public pages use `legal/PublicShell` instead.
 | Component | Use |
 |---|---|
 | `ui/Card` (`Card`, `CardHeader`, `CardTitle`, `CardDescription`, `DataRow`) | Every surface. `accent` adds a thin top rule, sparingly. `padding="none"` when a list brings its own. `DataRow` is a label/value line; `emphasis` makes it a total. |
-| `ui/StatCard` | One headline figure: label (may be a `<Term>`), formatted value, one plain caption, optional icon and footer. `captionClassName="hidden sm:block"` when cards sit two to a row on phones. |
+| `ui/StatCard` | One headline figure: label (may be a `<Term>`; a label, not a heading, so the page outline goes h1 → h2), formatted value, one plain caption, optional icon and footer. `captionClassName="hidden sm:block"` when cards sit two to a row on phones. |
 | `ui/PageHeader`, `SectionHeading` | Title, one or two plain sentences on what the page is for, an icon, and the page's main action. |
 | `ui/Button`, `LinkButton`, `buttonClasses` | The only button. `primary` (the one main action), `secondary`, `info` (bank), `danger` (delete), `ghost` (icon-only). `loading` spins and disables. |
-| `ui/Field` (`Field`, `Input`, `MoneyInput`, `Select`, `Checkbox`, `RadioCard`, `FieldGrid`) | Forms. `Field` owns label, `aside` ("Optional", "Box 2"), hint and error. `MoneyInput` shows "$", opens the decimal keypad, and is text, not `type="number"`. |
+| `ui/Field` (`Field`, `Input`, `MoneyInput`, `Select`, `Checkbox`, `RadioCard`, `FieldGrid`) | Forms. `Field` owns label, `aside` ("Optional", "Box 2"), hint and error; the hint and error carry ids `${htmlFor}-hint` and `${htmlFor}-error` for the control's `aria-describedby`, and an error belongs on the field that is wrong (with `aria-invalid`), not only in a status line. `MoneyInput` shows "$", opens the decimal keypad, and is text, not `type="number"`. |
 | `ui/Callout` | A tinted note inside a page: `warning`, `info`, `success`, `tip`, with an optional action. |
 | `ui/EmptyState` | What an empty list shows: what goes here, why, and the button that adds the first one. Never just "No data". |
 | `ui/SegmentedControl` | Two to four exclusive choices side by side (money in or out, list filters). Native radios underneath. |
@@ -112,7 +112,8 @@ page padding of their own. Public pages use `legal/PublicShell` instead.
 | `useLoad` | Load data for a key and reload on demand; `loading` is derived and a stale response is dropped. Use one per independent request (D21). |
 | `ui/SkipLink` | "Skip to main content", first in every frame; targets `#main`. |
 | `legal/AgreementGate` | Nothing in the app renders until the current Terms and the 18+ box are ticked (D40). `AgreementScreen` is exported for the preview. |
-| `legal/CookieNotice`, `reopenCookieNotice` | The informational cookie notice (D42), in the root layout. |
+| `legal/CookieNotice`, `reopenCookieNotice` | The informational cookie notice (D42), in the root layout. While it shows it reserves its height at the bottom of the page (scroll padding and body padding), so it never covers what has focus. |
+| `legal/underage`, `UnderageBlock`, `deletion` | The device's memory of an "I'm under 18" answer and the sign-up notice it shows; `afterDeletionUrl`, where to land after an account is deleted (with the Plaid follow-up when Plaid did not confirm). |
 | `legal/PublicShell`, `SiteFooter`, `LegalDocument`, `AuthLegalNote` | The public frame, the footer every page shows (`compact` inside the app), the policy page layout (short version, contents, numbered sections, `Conspicuous` for capitalised clauses), and the line under the sign-in forms. |
 | `tour/GuidedTour`, `startTour`, `tourSteps` | The first-visit tour (D43): spotlight on a `data-tour` element, a speech bubble, arrows and Escape; `startTour()` replays it. |
 | `overview/`, `transactions/`, `jobs/` | Pieces of one page each. |

@@ -65,9 +65,10 @@ export default function PrivacyPolicyPage() {
               <PolicyList
                 items={[
                   'your filing status, whether someone can claim you as a dependent, and (if married filing separately) whether your spouse itemizes;',
+                  'your hustles: the name and the kind (freelance, delivery or other) you give each one;',
                   'income and expenses: the amount, date, description, category and which of your hustles it belongs to;',
-                  'business trips: the date, miles and purpose;',
-                  'W-2 amounts from an employer (wages, tax withheld and similar boxes) and the name you give the job;',
+                  'business trips: the date, miles, purpose and hustle;',
+                  'W-2 amounts from an employer (wages, tax withheld and similar boxes), the name you give the job, and on a joint return whether the W-2 is yours or your spouse’s;',
                   'estimated tax payments: the date, amount and an optional note;',
                   'amounts from Forms 1098-T and 1098-E (tuition, scholarships, student loan interest);',
                   'home office size and your rent and utilities.',
@@ -115,8 +116,8 @@ export default function PrivacyPolicyPage() {
               />
               <p>
                 We do not use your information for advertising, marketing, profiling, or training artificial intelligence, and we do not sell it. We treat
-                the tax information you enter as confidential and use it only to produce your own estimate, which is the standard federal law sets for tax
-                return preparers, even though {LEGAL.appName} does not prepare or file returns.
+                the tax information you enter as confidential and use it only to produce your own estimate. {LEGAL.appName} does not prepare or file
+                returns.
               </p>
               <p>
                 If you are in the European Economic Area or the United Kingdom (the service is not offered there, see below), we rely on the need to
@@ -180,7 +181,7 @@ export default function PrivacyPolicyPage() {
               <PolicyList
                 items={[
                   'Everything in your account is kept until you delete it or your account.',
-                  `When you delete your account, everything is deleted at once. Encrypted database backups kept by our host for recovery expire on their own within ${LEGAL.backupRetentionDays} days.`,
+                  `When you delete your account, everything is deleted at once. Encrypted database backups kept by our host for recovery expire under its retention schedule, currently no more than ${LEGAL.backupRetentionDays} days.`,
                   'When you disconnect a bank, we tell Plaid to stop accessing it and delete the access token. Transactions already brought in stay, as part of your records, until you delete them.',
                   'Request logs kept by our host expire after a short period set by the host.',
                 ]}
@@ -195,8 +196,9 @@ export default function PrivacyPolicyPage() {
             <>
               <p>
                 Everything travels over encrypted connections (HTTPS). The database is encrypted at rest by its host, and bank access tokens are encrypted
-                again, with AES-256, before they are stored. Sign-in is handled by Clerk, which supports two-step verification. Only the operator can
-                reach the database. We never store bank logins.
+                again, with AES-256, before they are stored. Sign-in, including any two-step verification offered in your sign-in settings, is handled by
+                Clerk. Only the operator holds credentials to the database; the hosting companies listed above run the infrastructure under their own
+                security programs. We never store bank logins.
               </p>
               <p>
                 No system is perfectly secure. If a breach ever affects your information, we will tell you by email without unreasonable delay and as the
@@ -258,8 +260,9 @@ export default function PrivacyPolicyPage() {
           body: (
             <p>
               {LEGAL.appName} is only for people {LEGAL.minimumAge} and older, and every user confirms their age before using it. We do not knowingly
-              collect information from anyone younger, including children under 13. Anyone who says they are under {LEGAL.minimumAge} is offered
-              deletion of their account on the spot. If you believe a minor has used the service, write to {email} and we will delete the account.
+              collect information from anyone younger, including children under 13. When someone says they are under {LEGAL.minimumAge}, their account
+              and everything in it are deleted on the spot, and sign-up stays closed on that device. If you believe a minor has used the service, write
+              to {email} and we will delete the account.
             </p>
           ),
         },

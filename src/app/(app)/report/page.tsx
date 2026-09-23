@@ -104,7 +104,8 @@ function ReportHeader({ data, rows }: { data: SummaryResponse; rows: readonly Tr
     <header className="flex flex-col gap-4 border-b-2 border-fg pb-6 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <p className="text-sm font-semibold uppercase tracking-[0.1em] text-fg-muted">Multi-Hustle · Federal estimate</p>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight md:text-4xl">Tax report {data.taxYear}</h1>
+        {/* h2: the page's h1 is the PageHeader above (hidden only on paper). */}
+        <h2 className="mt-1 text-3xl font-bold tracking-tight md:text-4xl">Tax report {data.taxYear}</h2>
         <p className="mt-1 text-fg-muted">
           Filing as {filingStatusLabel(data.filingStatus).toLowerCase()}
           {data.filingStatusSource === 'default' && ' (assumed: no tax profile saved)'}

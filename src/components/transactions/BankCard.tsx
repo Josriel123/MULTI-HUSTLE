@@ -21,9 +21,14 @@ type Status = { kind: 'ok' | 'error' | 'info'; text: string } | null;
  * says so. Before connecting, the card says what connecting shares and links
  * both privacy policies (Plaid's developer policy asks apps to); once
  * connected, "Disconnect" revokes access at Plaid and forgets the token.
+ *
+ * Nothing reaches Plaid until "Connect a bank" is pressed: only then is a
+ * Link token requested (which tells Plaid the user's id) and Plaid's script
+ * loaded. The Cookie Policy and the Privacy Policy say so.
  */
 export function BankCard({ onSynced }: { onSynced: () => Promise<void> }) {
   const [token, setToken] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
   const [linked, setLinked] = useState<boolean | null>(null);
   const [hasSynced, setHasSynced] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -31,13 +36,28 @@ export function BankCard({ onSynced }: { onSynced: () => Promise<void> }) {
   const [sandbox, setSandbox] = useState(false);
   const [confirm, confirmDialog] = useConfirm();
 
-  /** A Link token is needed only to connect, so it is fetched only while no bank is connected. */
-  const loadLinkToken = useCallback(async (isCancelled: () => boolean = () => false) => {
-    const tokenRes = await fetch('/api/plaid/create_link_token', { method: 'POST' });
-    const tokenBody = await tokenRes.json().catch(() => null);
-    if (isCancelled()) return;
-    if (tokenRes.ok && tokenBody?.link_token) setToken(tokenBody.link_token);
-    else setStatus({ kind: 'error', text: tokenBody?.error ?? 'Bank connections are not available right now.' });
+  /** Asks for a Link token, and so loads Plaid, only when the person presses "Connect a bank". */
+  const startConnect = useCallback(async () => {
+    setConnecting(true);
+    setStatus(null);
+    try {
+      const tokenRes = await fetch('/api/plaid/create_link_token', { method: 'POST' });
+      const tokenBody = await tokenRes.json().catch(() => null);
+      if (tokenRes.ok && tokenBody?.link_token) {
+        setToken(tokenBody.link_token);
+        return;
+      }
+      setStatus({ kind: 'error', text: tokenBody?.error ?? 'Bank connections are not available right now.' });
+    } catch {
+      setStatus({ kind: 'error', text: 'Bank connections are not available right now.' });
+    }
+    setConnecting(false);
+  }, []);
+
+  /** Plaid's window closed without a bank (or after one): back to the plain button. */
+  const endConnect = useCallback(() => {
+    setToken(null);
+    setConnecting(false);
   }, []);
 
   useEffect(() => {
@@ -51,7 +71,6 @@ export function BankCard({ onSynced }: { onSynced: () => Promise<void> }) {
         setLinked(Boolean(body.linked));
         setHasSynced(Boolean(body.hasSynced));
         setSandbox(body.environment === 'sandbox');
-        if (!body.linked) await loadLinkToken(() => cancelled);
       } catch (err) {
         console.error('Failed to read bank connection status', err);
         if (!cancelled) {
@@ -63,7 +82,7 @@ export function BankCard({ onSynced }: { onSynced: () => Promise<void> }) {
     return () => {
       cancelled = true;
     };
-  }, [loadLinkToken]);
+  }, []);
 
   const sync = useCallback(async () => {
     setBusy(true);
@@ -121,13 +140,12 @@ export function BankCard({ onSynced }: { onSynced: () => Promise<void> }) {
           ? { kind: 'ok', text: 'Bank disconnected. Plaid has stopped sharing it with this app.' }
           : { kind: 'info', text: 'Bank disconnected here, but Plaid did not confirm. To be sure, also remove this app at my.plaid.com.' },
       );
-      await loadLinkToken();
     } catch {
       setStatus({ kind: 'error', text: 'Could not disconnect the bank. Try again.' });
     } finally {
       setBusy(false);
     }
-  }, [confirm, loadLinkToken]);
+  }, [confirm]);
 
   const onSuccess = useCallback(
     async (publicToken: string) => {
@@ -196,7 +214,17 @@ export function BankCard({ onSynced }: { onSynced: () => Promise<void> }) {
               </Button>
             </>
           ) : (
-            <ConnectButton token={token} onSuccess={onSuccess} busy={busy} />
+            <>
+              <Button
+                variant="info"
+                onClick={() => void startConnect()}
+                loading={busy || connecting}
+                icon={<Link2 size={16} aria-hidden />}
+              >
+                Connect a bank
+              </Button>
+              {token && <PlaidLinkOpener token={token} onSuccess={onSuccess} onExit={endConnect} />}
+            </>
           )}
         </div>
       </div>
@@ -224,15 +252,22 @@ export function BankCard({ onSynced }: { onSynced: () => Promise<void> }) {
 }
 
 /**
- * Plaid Link lives in its own component so its script loads only when a bank
- * is not connected yet: a connected account never needs it, and loading it
- * on every visit is what produced Plaid's "embedded more than once" warning.
+ * Plaid Link, mounted only after "Connect a bank" is pressed: mounting it is
+ * what loads Plaid's script, and it opens Plaid's window as soon as it is
+ * ready. A connected account never loads it, which also avoids Plaid's
+ * "embedded more than once" warning.
  */
-function ConnectButton({ token, onSuccess, busy }: { token: string | null; onSuccess: (publicToken: string) => Promise<void>; busy: boolean }) {
-  const { open, ready } = usePlaidLink({ token, onSuccess: (publicToken) => void onSuccess(publicToken) });
-  return (
-    <Button variant="info" onClick={() => open()} disabled={!ready || !token} loading={busy} icon={<Link2 size={16} aria-hidden />}>
-      Connect a bank
-    </Button>
-  );
+function PlaidLinkOpener({ token, onSuccess, onExit }: { token: string; onSuccess: (publicToken: string) => Promise<void>; onExit: () => void }) {
+  const { open, ready } = usePlaidLink({
+    token,
+    onSuccess: (publicToken) => {
+      onExit();
+      void onSuccess(publicToken);
+    },
+    onExit: () => onExit(),
+  });
+  useEffect(() => {
+    if (ready) open();
+  }, [ready, open]);
+  return null;
 }

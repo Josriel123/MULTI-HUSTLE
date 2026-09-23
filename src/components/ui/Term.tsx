@@ -119,6 +119,16 @@ export function Term({ k, children, className }: { k: GlossaryKey; children?: Re
         id={id}
         role="tooltip"
         popover="auto"
+        // Hoverable (WCAG 1.4.13): moving the pointer from the word onto the
+        // definition keeps it open; leaving both closes it.
+        onMouseEnter={() => {
+          if (hoverTimer.current) clearTimeout(hoverTimer.current);
+        }}
+        onMouseLeave={() => {
+          if (!hoverable()) return;
+          if (hoverTimer.current) clearTimeout(hoverTimer.current);
+          if (!pinned) hoverTimer.current = setTimeout(hide, 120);
+        }}
         className="fixed m-0 rounded-xl border border-border bg-card p-3.5 text-left text-sm font-normal normal-case leading-relaxed tracking-normal text-fg-muted shadow-pop [inset:unset] print:hidden"
       >
         <span className="mb-1 block font-semibold text-fg">{entry.term}</span>

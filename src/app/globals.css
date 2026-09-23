@@ -195,6 +195,12 @@
   }
 }
 
+/* While the cookie notice floats over the page, the page can scroll clear of
+   it (CookieNotice sets the variable to the height it covers). */
+body {
+  padding-bottom: var(--mh-cookie-notice, 0px);
+}
+
 /* While the phone's bottom tab bar shows, floating things (the cookie
    notice) sit above it: they add var(--mh-bottom-nav) to their offset. */
 @media (max-width: 1023.98px) {

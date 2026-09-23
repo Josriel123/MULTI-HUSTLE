@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Bike, Briefcase, Store, Tag, type LucideIcon } from 'lucide-react';
 import type { SummaryResponse } from '../api';
-import { formatCurrency } from '../format';
+import { formatCurrency, formatPercent } from '../format';
 import { LinkButton } from '../ui/Button';
 import { Card, CardDescription, CardHeader, CardTitle } from '../ui/Card';
 import { EmptyState } from '../ui/EmptyState';
@@ -59,7 +59,11 @@ export function HustleIncome({ data, yearHref }: { data: SummaryResponse; yearHr
                       </span>
                     </span>
                   </span>
-                  <span className="shrink-0 text-sm font-semibold tabular-nums">{formatCurrency(row.income)}</span>
+                  <span className="shrink-0 text-sm font-semibold tabular-nums">
+                    {formatCurrency(row.income)}
+                    {/* The bar below is drawn for the eye; this says the same for a screen reader. */}
+                    <span className="sr-only">, {formatPercent(row.share, 0)} of income counted</span>
+                  </span>
                 </div>
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface" aria-hidden>
                   <div className="h-full rounded-full bg-accent/70" style={{ width: `${row.share * 100}%` }} />

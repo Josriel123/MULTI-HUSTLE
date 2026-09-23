@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, Pencil, Trash2, X } from 'lucide-react';
 import { HUSTLE_KIND_KEYS, HUSTLE_KINDS, HUSTLE_NAME_MAX } from '@/lib/hustles';
 import { deleteHustle, errorText, updateHustle, type HustleItem } from '../api';
@@ -30,6 +30,18 @@ export function HustleManager({
   const [editing, setEditing] = useState<{ id: string; name: string; type: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  // When a rename ends, the Save and Cancel buttons disappear; focus goes back
+  // to that row's Rename button instead of falling to the page.
+  const refocusId = useRef<string | null>(null);
+  useEffect(() => {
+    if (editing || !refocusId.current) return;
+    document.querySelector<HTMLElement>(`[data-rename="${refocusId.current}"]`)?.focus();
+    refocusId.current = null;
+  }, [editing, hustles]);
+  const stopEditing = (id: string) => {
+    refocusId.current = id;
+    setEditing(null);
+  };
 
   async function saveEdit(h: HustleItem) {
     if (!editing) return;
@@ -47,7 +59,7 @@ export function HustleManager({
     setStatus(null);
     try {
       const result = await updateHustle(h.id, { name, type: editing.type });
-      setEditing(null);
+      stopEditing(result.merged ? result.into.id : h.id);
       await onChanged();
       setStatus({ kind: 'ok', text: result.merged ? `Merged into "${result.into.name}": ${result.moved} transaction${result.moved === 1 ? '' : 's'} moved.` : 'Saved.' });
     } catch (err) {
@@ -123,13 +135,20 @@ export function HustleManager({
                     <Button size="sm" variant="primary" loading={busyId === h.id} icon={<Check size={14} aria-hidden />} onClick={() => void saveEdit(h)} disabled={editing.name.trim() === ''}>
                       Save
                     </Button>
-                    <Button size="sm" variant="ghost" aria-label="Cancel" onClick={() => setEditing(null)} className="px-2">
+                    <Button size="sm" variant="ghost" aria-label="Cancel" onClick={() => stopEditing(h.id)} className="px-2">
                       <X size={15} aria-hidden />
                     </Button>
                   </>
                 ) : (
                   <>
-                    <Button size="sm" variant="ghost" className="px-2" aria-label={`Rename ${h.name}`} onClick={() => setEditing({ id: h.id, name: h.name, type: h.type })}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="px-2"
+                      aria-label={`Rename ${h.name}`}
+                      data-rename={h.id}
+                      onClick={() => setEditing({ id: h.id, name: h.name, type: h.type })}
+                    >
                       <Pencil size={15} aria-hidden />
                     </Button>
                     <Button size="sm" variant="ghost" className="px-2 hover:text-danger" aria-label={`Delete ${h.name}`} loading={busyId === h.id} onClick={() => void remove(h)}>

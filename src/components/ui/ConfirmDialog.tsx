@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Button } from './Button';
 
 export interface ConfirmOptions {
@@ -34,6 +34,8 @@ export function useConfirm(): [(options: ConfirmOptions) => Promise<boolean>, Re
   const [options, setOptions] = useState<ConfirmOptions | null>(null);
   const resolver = useRef<((ok: boolean) => void) | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  // Unique per use: several pages hold more than one confirm (the bank card, the list, the hustles).
+  const titleId = useId();
 
   const confirm = useCallback((opts: ConfirmOptions) => {
     // A second request while one is open answers the first one "no".
@@ -64,7 +66,7 @@ export function useConfirm(): [(options: ConfirmOptions) => Promise<boolean>, Re
   const dialog = (
     <dialog
       ref={dialogRef}
-      aria-labelledby="confirm-dialog-title"
+      aria-labelledby={titleId}
       // Escape fires `cancel`. Handle it here so state and the promise follow.
       onCancel={(e) => {
         e.preventDefault();
@@ -79,7 +81,7 @@ export function useConfirm(): [(options: ConfirmOptions) => Promise<boolean>, Re
     >
       {options && (
         <div className="flex flex-col gap-4 p-5 md:p-6">
-          <h2 id="confirm-dialog-title" className="text-lg font-semibold">
+          <h2 id={titleId} className="text-lg font-semibold">
             {options.title}
           </h2>
           {options.body && <div className="text-sm leading-relaxed text-fg-muted">{options.body}</div>}

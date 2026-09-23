@@ -8,6 +8,7 @@ import { LEGAL, formatLegalDate } from '@/lib/legal';
 import { deleteAccount, downloadAccountData, errorText, fetchAccount } from '@/components/api';
 import { formatDate } from '@/components/format';
 import { reopenCookieNotice } from '@/components/legal/CookieNotice';
+import { afterDeletionUrl } from '@/components/legal/deletion';
 import { startTour } from '@/components/tour/GuidedTour';
 import { useLoad } from '@/components/useLoad';
 import { Button } from '@/components/ui/Button';
@@ -63,11 +64,12 @@ export default function AccountPage() {
     setDeleting(true);
     setStatus(null);
     try {
-      await deleteAccount();
-      // If Clerk cannot sign out a user it has just deleted, load the page
-      // afresh (replace, so Back cannot return to the deleted account) rather
-      // than routing client-side with signed-in state still in memory.
-      await clerk.signOut({ redirectUrl: '/welcome?deleted=1' }).catch(() => window.location.replace('/welcome?deleted=1'));
+      const destination = afterDeletionUrl(await deleteAccount());
+      // Sign out, then load the next page afresh whatever Clerk did: it may
+      // reject, or resolve without navigating when the user it just deleted
+      // has no session left. Replace, so Back cannot return to the account.
+      await clerk.signOut({ redirectUrl: destination }).catch(() => undefined);
+      window.location.replace(destination);
     } catch (err) {
       setStatus({ kind: 'error', text: errorText(err, 'Could not delete your account. Please try again.') });
       setDeleting(false);
@@ -103,8 +105,13 @@ export default function AccountPage() {
           <div>
             <CardTitle>Delete your account</CardTitle>
             <CardDescription>
-              Erases everything you have entered, disconnects any bank through Plaid, and closes your sign-in account. There is no waiting period and nothing
-              is kept, apart from encrypted database backups that expire on their own within {LEGAL.backupRetentionDays} days.
+              Erases everything you have entered, asks Plaid to stop sharing any bank you connected, and closes your sign-in account. There is no waiting
+              period. Nothing is kept here, apart from encrypted database backups that expire within {LEGAL.backupRetentionDays} days; Clerk&rsquo;s and
+              Plaid&rsquo;s own records, and our host&rsquo;s short-lived request logs, follow their policies (see the{' '}
+              <Link href="/legal/privacy#retention" className="font-medium text-accent hover:underline">
+                Privacy Policy
+              </Link>
+              ).
             </CardDescription>
           </div>
           <Button variant="danger" loading={deleting} icon={<Trash2 size={16} aria-hidden />} onClick={() => void remove()} className="self-start">
@@ -158,7 +165,8 @@ export default function AccountPage() {
         <Card padding="lg" className="flex flex-col gap-3">
           <CardTitle>Sign-in and security</CardTitle>
           <p className="text-sm leading-relaxed text-fg-muted">
-            Your email, password and two-step sign-in are managed by Clerk. Change them, or see where you are signed in, from your account settings.
+            Your email, password and any two-step verification are managed by Clerk. Change them, or see where you are signed in, from your sign-in
+            settings.
           </p>
           <Button variant="secondary" size="sm" icon={<KeyRound size={15} aria-hidden />} onClick={() => clerk.openUserProfile()} className="self-start">
             Open sign-in settings

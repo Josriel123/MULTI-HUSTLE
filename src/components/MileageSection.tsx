@@ -189,7 +189,7 @@ export function MileageSection({ logs, totalMiles, ratePeriods, vehicle, hustles
           {listStatus && <InlineStatus kind={listStatus.kind} className="mb-3">{listStatus.text}</InlineStatus>}
           {logs.length === 0 ? (
             <EmptyState icon={<Car size={20} />} title="No trips logged yet">
-              Every business mile you log lowers your tax. Log trips as you go; a note of the date, the miles and why is the record the IRS asks for.
+              Each business mile you log can lower your taxable profit. Log trips as you go; a note of the date, the miles and why is the record the IRS asks for.
             </EmptyState>
           ) : (
             <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
@@ -209,7 +209,13 @@ export function MileageSection({ logs, totalMiles, ratePeriods, vehicle, hustles
                     <p className="text-sm font-semibold tabular-nums">{formatCurrency(log.deduction, { cents: true })}</p>
                     <p className="text-xs text-fg-faint">at {formatDollarRate(log.ratePerMile)}</p>
                   </div>
-                  <Button variant="ghost" size="sm" className="px-2 hover:text-danger" aria-label="Delete trip" onClick={() => void handleDelete(log)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="px-2 hover:text-danger"
+                    aria-label={`Delete the trip of ${formatMiles(log.miles)} on ${formatDate(log.date)}`}
+                    onClick={() => void handleDelete(log)}
+                  >
                     <Trash2 size={15} aria-hidden />
                   </Button>
                 </li>

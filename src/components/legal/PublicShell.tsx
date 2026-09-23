@@ -32,7 +32,9 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
                 Sign in
               </LinkButton>
               <LinkButton href="/sign-up" variant="primary" size="sm">
-                Create free account
+                {/* The long label pushed a 375px screen sideways. */}
+                <span className="sm:hidden">Sign up</span>
+                <span className="hidden sm:inline">Create free account</span>
               </LinkButton>
             </Show>
           </nav>

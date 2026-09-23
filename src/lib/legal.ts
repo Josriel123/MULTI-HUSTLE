@@ -57,7 +57,7 @@ export const SERVICE_PROVIDERS = [
   },
   {
     name: 'Plaid',
-    purpose: 'Only if you connect a bank: Plaid connects to your bank and passes this app your transactions.',
+    purpose: 'Only once you press "Connect a bank": Plaid learns your account id, connects to the bank you choose, and passes this app its transactions.',
     policy: 'https://plaid.com/legal/#end-user-privacy-policy',
   },
   {

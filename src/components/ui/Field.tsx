@@ -89,12 +89,15 @@ export function Field({ htmlFor, label, hint, aside, error, className, children 
         {aside && <span className="ml-1.5 font-normal text-fg-faint">{aside}</span>}
       </Label>
       {children}
+      {/* Ids a control can point aria-describedby at: `${htmlFor}-error` and `${htmlFor}-hint`. */}
       {error ? (
-        <p className="mt-1.5 text-sm text-danger" role="alert">
+        <p id={`${htmlFor}-error`} className="mt-1.5 text-sm text-danger" role="alert">
           {error}
         </p>
       ) : hint ? (
-        <p className="mt-1.5 text-xs leading-relaxed text-fg-faint">{hint}</p>
+        <p id={`${htmlFor}-hint`} className="mt-1.5 text-xs leading-relaxed text-fg-faint">
+          {hint}
+        </p>
       ) : null}
     </div>
   );

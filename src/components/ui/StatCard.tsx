@@ -42,7 +42,8 @@ export function StatCard({ label, value, caption, icon, accent = 'none', tone = 
             {icon}
           </span>
         )}
-        <h3 className="text-sm font-medium text-fg-muted">{label}</h3>
+        {/* A label for the figure, not a section heading: as an h3 it broke the outline, jumping from the page's h1. */}
+        <p className="text-sm font-medium text-fg-muted">{label}</p>
       </div>
       <div className={cn('text-[1.75rem] font-bold leading-tight tracking-tight tabular-nums md:text-[2rem]', toneClass)}>{value}</div>
       {caption && <p className={cn('text-sm leading-snug text-fg-muted', captionClassName)}>{caption}</p>}

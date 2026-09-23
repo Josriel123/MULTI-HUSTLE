@@ -112,6 +112,7 @@ Fill in `.env` — **`.env`, not `.env.local`**: the Prisma CLI reads only `.env
 | `PLAID_CLIENT_ID`, `PLAID_SECRET` | Plaid dashboard → Developers → Keys (the sandbox secret) |
 | `PLAID_ENV` | Leave as `sandbox` |
 | `ENCRYPTION_KEY` | Encrypts Plaid tokens at rest. Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
+| `NEXT_PUBLIC_CLERK_TELEMETRY_DISABLED` | `1`. Keeps Clerk's server SDK from sending usage telemetry (the browser side is off in code); the Privacy Policy promises no analytics |
 
 Create the tables, then start the app:
 
@@ -148,6 +149,7 @@ baseline as applied first — see [`prisma/migrations/README.md`](prisma/migrati
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
 | `npm run build` | Production build |
+| `npm run notices` | Regenerate `public/third-party-notices.txt` after dependencies change |
 | `npm start` | Serve the production build |
 
 **On Windows**, stop `npm run dev` before running `npx prisma generate`, and
@@ -197,7 +199,7 @@ docs/
 ├── legal-changelog.md    Every version of the Terms and Privacy Policy
 └── audits/               The engine audit and two end-to-end passes, each triaged
 public/.well-known/security.txt   The security contact
-THIRD_PARTY_NOTICES.md    Licences of the packages the app is built on
+public/third-party-notices.txt   Licences of the packages the app is built on (npm run notices)
 ```
 
 ## Known limitations
@@ -231,7 +233,7 @@ THIRD_PARTY_NOTICES.md    Licences of the packages the app is built on
 | [`docs/audits/`](docs/audits/) | The three audits, their evidence and their triage |
 | [`docs/security-program.md`](docs/security-program.md) | The written security program: data held, safeguards, retention, incidents |
 | [`docs/legal-changelog.md`](docs/legal-changelog.md) | What changed in each version of the Terms and Privacy Policy |
-| [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) | Licence texts of the runtime dependencies, the typeface and the icon |
+| [`public/third-party-notices.txt`](public/third-party-notices.txt) | Licence texts of the runtime dependencies, the typeface and the icon (served at `/third-party-notices.txt`) |
 
 Pages moved in the 2026-09 redesign: `/deductions` is now `/transactions` and
 `/mileage`, `/student` is `/education`, and `/export` is `/report`. The old
@@ -240,4 +242,4 @@ paths redirect.
 ## License
 
 The code is for educational and portfolio purposes. The packages it is built
-on keep their own licences; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+on keep their own licences; see [`public/third-party-notices.txt`](public/third-party-notices.txt).

@@ -67,21 +67,26 @@ export function GuidedTour() {
   const [viewport, setViewport] = useState({ w: 0, h: 0 });
   const bubbleRef = useRef<HTMLDivElement>(null);
   const [bubbleH, setBubbleH] = useState(180);
+  // Where focus was when the tour opened, to give it back when it closes.
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const begin = useCallback(() => {
+    returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setStep(0);
+  }, []);
 
   // Start once per browser. Not over the dev-only preview's screenshots,
   // unless it asks with ?tour=1.
   useEffect(() => {
     const preview = pathname.startsWith('/preview');
     if (preview ? params.get('tour') !== '1' : tourDone()) return;
-    const id = window.setTimeout(() => setStep(0), 600);
+    const id = window.setTimeout(begin, 600);
     return () => window.clearTimeout(id);
-  }, [pathname, params]);
+  }, [pathname, params, begin]);
 
   useEffect(() => {
-    const onStart = () => setStep(0);
-    window.addEventListener(START_TOUR_EVENT, onStart);
-    return () => window.removeEventListener(START_TOUR_EVENT, onStart);
-  }, []);
+    window.addEventListener(START_TOUR_EVENT, begin);
+    return () => window.removeEventListener(START_TOUR_EVENT, begin);
+  }, [begin]);
 
   const current = step === null ? null : TOUR_STEPS[step];
 
@@ -90,6 +95,14 @@ export function GuidedTour() {
     setDrawer(false);
     setStep(null);
     setRect(null);
+    // Back to the button that started it ("Take the tour"), or to the page
+    // when that is gone (it lived in the phone menu, which just closed).
+    const target = returnFocus.current;
+    returnFocus.current = null;
+    window.setTimeout(() => {
+      if (target && target.isConnected && target.offsetParent !== null && target !== document.body) target.focus();
+      else document.getElementById('main')?.focus();
+    }, 0);
   }, []);
 
   // Find and measure the target; open the phone menu when the tab lives there.

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { LegalDocument, PolicyList } from '@/components/legal/LegalDocument';
-import { LEGAL } from '@/lib/legal';
+import { LEGAL, formatLegalDate } from '@/lib/legal';
 
 export const metadata: Metadata = {
   title: 'Accessibility',
@@ -20,17 +20,25 @@ export default function AccessibilityPage() {
       shortVersion={[
         `We want ${LEGAL.appName} to work for everyone, including people who use a keyboard, a screen reader, zoom or high contrast.`,
         'We aim for the Web Content Accessibility Guidelines (WCAG) 2.2 at level AA.',
-        `If something gets in your way, write to ${LEGAL.contactEmail}; we reply within five business days.`,
+        `If something gets in your way, write to ${LEGAL.contactEmail}; we aim to reply within five business days.`,
       ]}
       sections={[
         {
           id: 'standard',
           title: 'Our standard',
           body: (
-            <p>
-              We aim to meet the Web Content Accessibility Guidelines (WCAG) 2.2, level AA, published by the W3C. We treat an accessibility problem as a bug
-              to fix, not a feature to add later.
-            </p>
+            <>
+              <p>
+                We aim to meet the Web Content Accessibility Guidelines (WCAG) 2.2, level AA, published by the W3C. We treat an accessibility problem as a
+                bug to fix, not a feature to add later.
+              </p>
+              <p>
+                <strong className="text-fg">Status:</strong> {LEGAL.appName} partially conforms to WCAG 2.2 level AA: most of it meets the standard, and the
+                known exceptions are listed below. Last reviewed {formatLegalDate(LEGAL.effectiveDate)}, by self-assessment: a review of the code
+                against the WCAG success criteria, automated contrast tests, and keyboard checks of the navigation, dialogs and tour. It relies on HTML,
+                CSS, JavaScript and WAI-ARIA.
+              </p>
+            </>
           ),
         },
         {
@@ -57,6 +65,7 @@ export default function AccessibilityPage() {
               items={[
                 'The sign-in forms are provided by Clerk, and the bank connection window by Plaid. We choose providers that work on accessibility, but we cannot change their screens; tell us about any problem and we will raise it with them.',
                 'The printed tax report is produced by your browser’s print function; its structure follows the page, but some print dialogs are not fully accessible.',
+                'While a page first loads its figures, the placeholder is shown visually but not announced to screen readers; the figures are read normally once they appear.',
               ]}
             />
           ),
@@ -66,8 +75,8 @@ export default function AccessibilityPage() {
           title: 'Tell us',
           body: (
             <p>
-              If you find something hard or impossible to use, email {email} with the page and what happened. We reply within five business days, and if
-              we cannot fix it quickly we will help you get what you needed another way.
+              If you find something hard or impossible to use, email {email} with the page and what happened. We aim to reply within five business days,
+              and if we cannot fix it quickly we will help you get what you needed another way.
             </p>
           ),
         },

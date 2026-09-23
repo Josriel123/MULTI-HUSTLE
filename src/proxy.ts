@@ -26,6 +26,7 @@ const isPublicRoute = createRouteMatcher([
   '/api/webhooks/clerk',
   '/.well-known/(.*)',
   '/robots.txt',
+  '/third-party-notices.txt',
 ])
 
 const isApiRoute = createRouteMatcher(['/api/(.*)'])

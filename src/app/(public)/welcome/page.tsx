@@ -7,7 +7,7 @@ import { plaidEnv } from '@/lib/plaid';
 import { SUPPORTED_TAX_YEARS } from '@/lib/tax/parameters';
 
 export const metadata: Metadata = {
-  title: 'Know what your side hustles owe',
+  title: 'See what your side hustles may owe',
   description: `${LEGAL.appName} estimates the federal tax on gig, freelance and side income, and shows how much is safe to spend. Free.`,
 };
 
@@ -18,24 +18,37 @@ export const metadata: Metadata = {
  * and its dark-patterns report), no urgency, and the limits are as visible as
  * the features.
  */
-export default async function WelcomePage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
-  const { deleted } = await searchParams;
+export default async function WelcomePage({ searchParams }: { searchParams: Promise<{ deleted?: string; underage?: string; plaid?: string }> }) {
+  const { deleted, underage, plaid } = await searchParams;
   const years = `${SUPPORTED_TAX_YEARS[0]}–${SUPPORTED_TAX_YEARS[SUPPORTED_TAX_YEARS.length - 1]}`;
   return (
     <div className="flex flex-col gap-16">
-      {deleted === '1' && (
-        <p role="status" className="mx-auto max-w-2xl rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-center text-sm text-fg">
-          Your account and all of your data have been deleted. Thank you for trying {LEGAL.appName}.
-        </p>
+      {(deleted === '1' || underage === '1') && (
+        <div role="status" className="mx-auto flex max-w-2xl flex-col gap-1 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-center text-sm text-fg">
+          <p>
+            {underage === '1'
+              ? `Your account has been deleted, and nothing about you was kept. ${LEGAL.appName} is for people ${LEGAL.minimumAge} and older.`
+              : `Your account and all of your data have been deleted. Thank you for trying ${LEGAL.appName}.`}
+          </p>
+          {plaid === 'check' && (
+            <p>
+              Plaid did not confirm that it stopped sharing your bank with us. To be sure, remove {LEGAL.appName} at{' '}
+              <a href="https://my.plaid.com" target="_blank" rel="noopener noreferrer" className="font-medium text-accent underline underline-offset-2">
+                my.plaid.com<span className="sr-only"> (opens in a new tab)</span>
+              </a>
+              .
+            </p>
+          )}
+        </div>
       )}
 
       <section className="grid items-center gap-10 lg:grid-cols-[1.1fr_1fr]">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.1em] text-accent">Free federal tax estimator</p>
-          <h1 className="mt-3 text-4xl font-bold leading-[1.1] tracking-tight md:text-5xl">Know what your side hustles owe, before tax day does.</h1>
+          <h1 className="mt-3 text-4xl font-bold leading-[1.1] tracking-tight md:text-5xl">See what your side hustles may owe, before tax day does.</h1>
           <p className="mt-4 max-w-xl text-lg leading-relaxed text-fg-muted">
             Driving, delivering, freelancing, selling online? {LEGAL.appName} estimates the federal tax on all of it together, shows what you have
-            already paid, and tells you how much of your hustle money is safe to spend.
+            already paid, and how much of your hustle money is safe to spend once the estimated tax is set aside.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <LinkButton href="/sign-up" variant="primary" size="lg" trailingIcon={<ArrowRight size={18} aria-hidden />}>

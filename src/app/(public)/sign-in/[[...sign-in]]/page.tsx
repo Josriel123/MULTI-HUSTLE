@@ -9,7 +9,7 @@ export default function SignInPage() {
   return (
     <div className="flex flex-col items-center gap-6">
       <SignIn path="/sign-in" routing="path" signUpUrl="/sign-up" />
-      <AuthLegalNote action="signing in" />
+      <AuthLegalNote />
     </div>
   );
 }

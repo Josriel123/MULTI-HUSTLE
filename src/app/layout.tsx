@@ -48,6 +48,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       signInFallbackRedirectUrl="/"
       signUpFallbackRedirectUrl="/"
       afterSignOutUrl="/welcome"
+      // Clerk's development instances send usage telemetry from the browser;
+      // the Privacy Policy promises no analytics, so it is off everywhere.
+      telemetry={false}
     >
       <html lang="en" className={outfit.variable} suppressHydrationWarning>
         <body className="min-h-screen bg-bg text-fg antialiased">

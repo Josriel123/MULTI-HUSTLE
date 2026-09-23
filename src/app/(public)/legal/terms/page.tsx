@@ -16,7 +16,9 @@ export const metadata: Metadata = {
  *    limited instead.
  *  - Courts, with a small-claims option, rather than arbitration: for a free
  *    tool, mass-arbitration fees are a larger risk than a class action.
- *  - The California Civil Code §1789.3 notice is included.
+ *  - California residents get the Department of Consumer Affairs contact. It is
+ *    not framed as the Civil Code §1789.3 notice: that section is about paid
+ *    services, and this one is free.
  */
 export default function TermsPage() {
   const email = (
@@ -42,8 +44,8 @@ export default function TermsPage() {
           body: (
             <p>
               These terms are an agreement between you and {LEGAL.operatorName}, who runs {LEGAL.appName} (&ldquo;we&rdquo;, &ldquo;us&rdquo;). You agree
-              to them, and to the <PolicyLink href="/legal/privacy">Privacy Policy</PolicyLink>, when you tick the box and choose &ldquo;Agree and
-              continue&rdquo; in the app. If you do not agree, do not use {LEGAL.appName}.
+              to them, and to the <PolicyLink href="/legal/privacy">Privacy Policy</PolicyLink>, when you tick the boxes and choose &ldquo;Agree and
+              continue&rdquo; in the app, before you use it. If you do not agree, do not use {LEGAL.appName}.
             </p>
           ),
         },
@@ -232,13 +234,13 @@ export default function TermsPage() {
         },
         {
           id: 'california',
-          title: 'Notice for California residents',
+          title: 'California residents',
           body: (
             <p>
-              Under California Civil Code §1789.3: the service is provided by {LEGAL.operatorName} ({email}
-              {LEGAL.mailingAddress ? `, ${LEGAL.mailingAddress}` : '; postal address on request'}). There is no charge for the service. You may contact the
-              Complaint Assistance Unit of the Division of Consumer Services of the California Department of Consumer Affairs in writing at 1625 North
-              Market Blvd., Suite N 112, Sacramento, CA 95834, or by telephone at (800) 952-5210.
+              {LEGAL.appName} is provided free of charge by {LEGAL.operatorName} ({email}
+              {LEGAL.mailingAddress ? `, ${LEGAL.mailingAddress}` : '; postal address on request'}). California residents may contact the Complaint
+              Assistance Unit of the Division of Consumer Services of the California Department of Consumer Affairs in writing at 1625 North Market
+              Blvd., Suite N 112, Sacramento, CA 95834, or by telephone at (800) 952-5210.
             </p>
           ),
         },

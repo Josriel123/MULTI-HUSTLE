@@ -109,9 +109,11 @@ five business days.
 
 - One branch per change, tests first for bug fixes, and the owner pushes
   (AGENTS.md "Process"). Schema changes are committed SQL, applied by hand.
-- When dependencies change, regenerate `THIRD_PARTY_NOTICES.md` from the
-  production dependency tree and check the Licenses page still lists what
-  ships to users.
+- When dependencies change, run `npm run notices` to regenerate
+  `public/third-party-notices.txt` (served with the site) from the production
+  dependency tree, and check the Licenses page still lists what ships to
+  users. A new SDK is also checked for what it sends on its own (Clerk's
+  telemetry, for one, is switched off).
 - A change to what the app collects, who receives it, or how long it is kept
   updates the Privacy Policy, bumps `LEGAL.agreementVersion` if the change
   matters to users, and gets an entry in `docs/legal-changelog.md`.

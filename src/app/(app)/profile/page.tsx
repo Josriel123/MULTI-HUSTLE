@@ -92,6 +92,7 @@ function ProfileForm({ initial, onSaved }: { initial: TaxProfile; onSaved: () =>
             How you will file your {year} return. Not sure?{' '}
             <a href={FILING_STATUS_HELP_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-accent hover:underline">
               Ask the IRS&rsquo;s interactive check <ExternalLink size={13} aria-hidden />
+              <span className="sr-only"> (opens in a new tab)</span>
             </a>
           </p>
           <div className="mt-4 grid gap-2.5 md:grid-cols-2">
