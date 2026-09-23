@@ -69,18 +69,12 @@ afterwards, read-only: every count unchanged, the three columns present,
 nullable and null on all eight users (so each is asked to agree once), `plan`
 untouched, eight migrations applied, none rolled back.
 
-**`20260925000000_multiple_banks` is committed; apply it before this release
-is deployed, and before running the dev server on this code.** It only adds
-columns, so the live release is unaffected; the new code's Prisma client
-selects the new columns, so every transaction and bank query fails without
-them. Measured on main immediately before, read-only (2026-09-23): 8 users,
-128 transactions summing 171,070.25, three bank connections, eight migrations
-applied. After it runs, those should be unchanged and the four new columns
-null everywhere.
-
-```bash
-npx prisma migrate deploy
-```
+**`20260925000000_multiple_banks` was applied to main on 2026-09-23** by the
+owner, before the code that uses it was pushed (D47). Measured read-only
+immediately before: 8 users, 128 transactions summing 171,070.25, three bank
+connections, eight migrations applied. Checked afterwards, read-only: all of
+those unchanged, the four columns present, nullable and null everywhere, nine
+migrations applied, none rolled back.
 
 **Next, after this release is live: drop `User.plan`.** Nothing reads it (it
 held the string "Pro Plan" on every row, for a plan that does not exist), and
