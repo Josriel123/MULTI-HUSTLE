@@ -125,7 +125,12 @@ export function MileageSection({
           // figure entirely. This is the mileage deduction on Schedule C.
           label="Mileage deduction"
           value={formatCurrency(totalDeduction, { cents: true })}
-          caption="Schedule C line 9, each trip at the rate in force on its date"
+          // Deliberately conditional. When actual vehicle costs are larger,
+          // the engine applies those on line 9 and takes none of this
+          // (Pub. 463: one method per vehicle per year), and says so in a
+          // vehicle_method_conflict warning below. Showing the applied figure
+          // here instead is an open item in PLAN.md.
+          caption="Logged miles at each trip's rate (Schedule C line 9), unless actual vehicle costs are larger — then the estimate uses those instead"
           accent="accent"
           tone="accent"
         />
