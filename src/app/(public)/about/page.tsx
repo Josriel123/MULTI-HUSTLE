@@ -13,7 +13,7 @@ export default function AboutPage() {
   const rows: [string, React.ReactNode][] = [
     ['Service', `${LEGAL.appName}, a free web app that estimates US federal tax on side-hustle income`],
     ['Run by', `${LEGAL.operatorName}, ${LEGAL.operatorKind}`],
-    ['Based in', LEGAL.country],
+    ['Based in', `${LEGAL.location}, ${LEGAL.country}`],
     [
       'Email',
       <a key="e" href={`mailto:${LEGAL.contactEmail}`} className="font-medium text-accent hover:underline">

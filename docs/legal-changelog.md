@@ -26,5 +26,7 @@ Policy, data deletion page, accessibility statement and licenses page.
   days.
 - Terms: estimates are for planning, not tax advice or a return; warranty
   disclaimer and a $100 liability cap with the usual carve-outs; disputes by
-  email first, then the courts (no arbitration). Governing state not yet set
-  (`LEGAL.governingState`).
+  email first, then the courts (no arbitration). Florida law; the state or
+  federal courts in Miami-Dade County, Florida, with small claims wherever the
+  user lives. Named before anyone had agreed (0 of 8 accounts), so still this
+  version; until then the clause read "the state where the operator lives".

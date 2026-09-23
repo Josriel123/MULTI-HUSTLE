@@ -215,9 +215,8 @@ public/third-party-notices.txt   Licences of the packages the app is built on (n
 - **Plaid sandbox only.** Its sample data is regenerated whenever a bank is
   linked, so re-linking an existing test account duplicates its history —
   start a new test user for fresh bank data.
-- **The policies were written from the code, not by a lawyer**, and the
-  operator's governing state and postal address are still to be filled in
-  (`src/lib/legal.ts`).
+- **The policies were written from the code, not by a lawyer.** The operator's
+  postal address is not published yet (`src/lib/legal.ts`).
 - Engineering items still open are tracked in [PLAN.md](PLAN.md).
 
 ## Documentation

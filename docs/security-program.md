@@ -96,7 +96,12 @@ If personal information may have been exposed:
    logs.
 3. Tell the affected users by email without unreasonable delay, as the
    Privacy Policy promises, and within any deadline set by the laws of the
-   states they live in.
+   states they live in. The operator is in Florida, whose breach law (Fla.
+   Stat. §501.171) asks for notice to affected people no
+   later than 30 days after a breach is determined, notice to the Florida
+   Department of Legal Affairs within 30 days when 500 or more Floridians are
+   affected, and notice to the credit reporting agencies above 1,000; confirm
+   the current rules with counsel at the time.
 4. If unencrypted information about 500 or more people was taken, notify the
    FTC within 30 days of discovery, as the Safeguards Rule requires of
    businesses it covers.

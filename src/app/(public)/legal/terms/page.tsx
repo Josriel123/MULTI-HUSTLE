@@ -27,7 +27,9 @@ export default function TermsPage() {
     </a>
   );
   const law = LEGAL.governingState ? `the laws of the State of ${LEGAL.governingState}` : 'the laws of the state in the United States where the operator lives';
-  const courts = LEGAL.governingState ? `the state or federal courts located in ${LEGAL.governingState}` : 'the state or federal courts where the operator lives';
+  const courts = LEGAL.governingState
+    ? `the state or federal courts located in ${LEGAL.venueCounty ? `${LEGAL.venueCounty}, ` : ''}${LEGAL.governingState}`
+    : 'the state or federal courts where the operator lives';
   return (
     <LegalDocument
       title="Terms of Service"

@@ -20,7 +20,8 @@ import { LEGAL, SERVICE_PROVIDERS } from '../legal';
  *    current version, and say so in the commit message.
  */
 const AGREED: Record<string, string> = {
-  '2026-09-23': '60a2d2d60e72e931',
+  // Re-recorded when Florida law and Miami-Dade courts were named, before anyone had agreed (docs/legal-changelog.md).
+  '2026-09-23': '136918de3eced907',
 };
 
 function fingerprint(): string {

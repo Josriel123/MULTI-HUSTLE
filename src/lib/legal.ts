@@ -14,11 +14,15 @@ export const LEGAL = {
   operatorKind: 'an individual developer',
   contactEmail: 'joelbueno09@hotmail.com',
   country: 'United States',
+  /** Where the operator is, as the About page shows it: a city, never a street address. */
+  location: 'Miami, Florida',
   /**
-   * The state whose law governs the Terms. Null words the clause without
-   * naming one; set it (e.g. 'New York') to name the operator's state.
+   * The state whose law governs the Terms, and the county whose courts hear
+   * disputes (small claims excepted). Null words the clause without naming
+   * one. Changing either once people have agreed is a new agreementVersion.
    */
-  governingState: null as string | null,
+  governingState: 'Florida' as string | null,
+  venueCounty: 'Miami-Dade County' as string | null,
   /** YYYY-MM-DD. Shown on every policy. */
   effectiveDate: '2026-09-23',
   /** Stored with each user's acceptance. Bump it when the Terms or the Privacy Policy change materially. */
