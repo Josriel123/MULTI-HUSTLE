@@ -12,11 +12,13 @@
 ![Plaid](https://img.shields.io/badge/Banking-Plaid_sandbox-00D64F)
 
 Connect a bank through Plaid's sandbox or enter transactions by hand, give each
-one a tax category, log business mileage, and add a 1098-T, a 1098-E and a home
-office. The app turns that into a line-by-line federal estimate in Form 1040
-order — Schedule C, Schedule SE, the QBI deduction, the standard deduction,
-income tax — with the rule behind each line, and exports an organizer for a tax
-preparer.
+one a category, log business mileage, and add what else applies: a W-2 job, the
+estimated tax payments you have sent, a 1098-T, a 1098-E, a home office. The app
+turns that into a federal estimate you can act on: what the year's tax comes to,
+how much is already paid, what is left to set aside, and what is safe to spend.
+Behind it is a line-by-line computation in Form 1040 order (Schedule C,
+Schedule SE, the QBI deduction, the standard deduction, income tax) with the
+rule behind each line, and a tax report that prints for a preparer.
 
 > **This is an estimate for planning, not tax advice.** It covers federal
 > income and self-employment tax only, leaves out every tax credit (so it runs
@@ -46,6 +48,14 @@ failed first — and all of it is linked from [`docs/audits/`](docs/audits/).
 cross the API as strings, and are formatted only at the last moment. The one
 place a JavaScript number slipped into a comparison was caught by a read-only
 check against real rows — 12 of 15 matched until it was fixed.
+
+**Made for someone who has never done their own taxes.** A new account gets a
+three-step setup checklist. Screens are named for what you are doing ("Income &
+expenses", "Tax payments"), every tax word on screen explains itself when you
+tap it, and each figure says in a sentence where it comes from. Light and dark
+themes, and it works on a phone. To see every screen without an account, run
+the app and open `/preview` (development only): the real pages, fed sample data
+through the real engine.
 
 **Honest about its limits.** When the engine cannot know a fact that would
 change the answer, it either assumes the conservative reading or makes the
@@ -102,6 +112,10 @@ npm run dev
 Open <http://localhost:3000> and sign up through Clerk. To link a bank, pick any
 institution in Plaid's sandbox and sign in with `user_good` / `pass_good`.
 
+Just looking? <http://localhost:3000/preview> renders every screen with sample
+data, no sign-in needed (development only; `?scenario=new` shows an empty
+account).
+
 Optional demo data for your account — your Clerk user id starts with `user_`:
 
 ```bash
@@ -116,29 +130,37 @@ baseline as applied first — see [`prisma/migrations/README.md`](prisma/migrati
 | Command | Does |
 |---|---|
 | `npm run dev` | Development server on port 3000 |
-| `npm test` | The Vitest suite (273 tests) |
+| `npm test` | The Vitest suite (360 tests) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
 | `npm run build` | Production build |
 | `npm start` | Serve the production build |
 
-**On Windows**, stop `npm run dev` before running `npm run build` or
-`npx prisma generate`: both need files the dev server holds open, and fail with
-`EPERM`. Syncing the project folder with OneDrive makes this more likely.
+**On Windows**, stop `npm run dev` before running `npx prisma generate`, and
+restart it afterwards: the dev server holds the Prisma query engine open, so
+generate fails with `EPERM` on it (and a running server keeps the old client in
+memory anyway). `npm run build` has failed the same way. Syncing the project
+folder with OneDrive makes both more likely.
 
 ## Project layout
 
 ```
 src/
-├── app/                  Pages: dashboard, deductions & mileage, student forms,
-│   │                     home office, CPA export
+├── app/                  Pages: overview, income & expenses, mileage, W-2 jobs,
+│   │                     tax payments, home office, education, tax report,
+│   │                     tax profile; preview/ is the dev-only sample-data view
 │   └── api/              Route handlers — each authenticates itself
 ├── components/           Shared UI; its README is the design-system spec
-│   └── ui/               Buttons, cards, fields, the confirm dialog, …
+│   └── ui/               Buttons, cards, fields, dialogs, the term popover, …
 ├── lib/
 │   ├── tax/              The federal engine: pure functions, cited, tested
+│   ├── dashboard.ts      Builds the summary and chart responses from rows (pure)
+│   ├── estimateRows.ts   Loads one user's rows for one tax year
+│   ├── glossary.ts       Plain-English definitions for the tax words on screen
+│   ├── hustles.ts        Hustle names, kinds, and matching deposits to them
 │   ├── taxYear.ts        How every route decides which year it is answering for
 │   ├── validation.ts     Input is refused, never silently corrected
+│   ├── formInput.ts      The same, for W-2s, payments and the tax profile
 │   ├── crypto.ts         AES-256-GCM for Plaid tokens at rest
 │   └── user.ts           Creates the user row on first write
 └── proxy.ts              Next.js 16 Proxy: sends signed-out page visits to sign-in
@@ -152,10 +174,14 @@ docs/
 
 ## Known limitations
 
-- **Federal only**, 2024–2026, for one self-employed person. No state tax.
+- **Federal only**, 2024–2026, for one self-employed person. No state tax. On
+  a joint return the spouse's W-2 counts, but a spouse's own self-employment
+  does not.
 - **No tax credits**, so the estimate is higher than the real liability for
   anyone who qualifies for one. The full list of what is not modeled is shown
   under every estimate and in the printed organizer.
+- **Estimated payments are recorded, not sent,** and the estimate does not work
+  out due dates or underpayment penalties.
 - **Plaid sandbox only.** Its sample data is regenerated whenever a bank is
   linked, so re-linking an existing test account duplicates its history —
   start a new test user for fresh bank data.
@@ -172,6 +198,10 @@ docs/
 | [`src/components/README.md`](src/components/README.md) | UI tokens, components and page conventions |
 | [`prisma/migrations/README.md`](prisma/migrations/README.md) | Schema history and how to apply it |
 | [`docs/audits/`](docs/audits/) | The three audits, their evidence and their triage |
+
+Pages moved in the 2026-09 redesign: `/deductions` is now `/transactions` and
+`/mileage`, `/student` is `/education`, and `/export` is `/report`. The old
+paths redirect.
 
 ## License
 

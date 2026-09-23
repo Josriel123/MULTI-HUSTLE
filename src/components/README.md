@@ -1,156 +1,138 @@
 # UI components and page conventions
 
-This directory is the only place for shared UI. `src/app/components/` is gone;
-do not recreate it. The two reference pages are the dashboard
-(`src/app/page.tsx`) and the home office form (`src/app/office/page.tsx`).
-Convert the remaining pages to look like those two.
+This directory is the only place for shared UI. Every page follows the rules
+here; the Overview (`src/app/page.tsx`) and Income & expenses
+(`src/app/transactions/page.tsx`) are the reference pages. Why it looks this
+way is [D33](../../docs/decision-log.md#d33).
 
-## Two rules that outrank everything else on this page
+## Three rules that outrank everything else on this page
 
 1. **Every screen that shows a figure from the estimate renders
-   `<EstimateNotice>`** with the response's `disclaimer`, `warnings` and
-   `assumptions`, directly below the figures. The engine returns those next
-   to the number so nobody can show one without the other. Dropping them is
-   a regression, not a simplification.
-2. **No tax arithmetic in a `.tsx` file.** Read `estimate` from
-   `fetchSummary()`; format it with `format.ts`. If a component adds,
-   multiplies or compares money to produce a tax figure, it is a bug. The
-   home office page shows both methods, the income cap and the carryover
-   without a single operator, by reading `estimate.scheduleC.homeOffice`.
+   `<EstimateNotice>`** with the response's `disclaimer`, `warnings`,
+   `assumptions` and `notModeled`, below the figures. The engine returns those
+   next to the number so nobody can show one without the other. Dropping them
+   is a regression, not a simplification. (D16)
+2. **No arithmetic on money in a `.tsx` file.** Not for a tax figure, not for
+   a bar width, not for a total. Read the value from the summary (`fetchSummary`)
+   or the route that owns it, and format it with `format.ts`. Shares for bars
+   and progress, "left to pay" and "refund", and list totals are computed on
+   the server (`src/lib/dashboard.ts`, the payments route). If a value is not
+   in a payload, add it there. (D16, D34)
+3. **No tax facts in a page.** Rates, thresholds, due dates and citations come
+   from the engine: through the API, or by importing its constants (the
+   profile page reads the standard deduction from `getTaxYearParameters`; the
+   glossary quotes `SE_RATES`). Qualitative explanations are fine; numbers are
+   not. (D26)
 
 ## Tokens
 
-Tailwind 4 is on. `globals.css` keeps the original palette as CSS custom
-properties and aliases them in `@theme inline`, so utilities compile to
-`var(--…)` and the print stylesheet can still override the variables.
+Light by default, dark when the operating system asks (`prefers-color-scheme`),
+print resets to black on white. Every colour is a custom property in
+`src/app/globals.css`, aliased in `@theme inline`, so utilities compile to
+`var(--c-…)`. **Never type a colour** in a component: no hex, no `bg-white`,
+no `text-black`. If one is missing, add it to `:root`, the dark block and
+`@theme` together.
 
-| Use it for | Utility | Backed by |
-|---|---|---|
-| Page background | `bg-bg` | `--bg-primary` |
-| Content area | `bg-surface` | `--bg-secondary` |
-| Cards, inputs' parent | `bg-card` | `--bg-card` |
-| Body text | `text-fg` | `--text-primary` |
-| Secondary text, labels | `text-fg-muted` | `--text-secondary` |
-| Hints, placeholders | `text-fg-faint` | `--text-muted` |
-| Money in the user's favour, primary actions, active nav | `text-accent`, `bg-accent`, `border-accent` | `--accent-green` |
-| Tax owed, destructive actions, engine notices | `text-danger`, `bg-danger`, `border-danger` | `--accent-red` |
-| Plaid, disclaimers, informational | `text-info`, `bg-info`, `border-info` | `--accent-blue` |
-| Lines | `border-border`, hover `border-border-strong` | `--border-color`, `--border-strong` |
-| Card radius | `rounded-card` | `--border-radius` (12px) |
-| Entrance animation | `animate-slide-up` | keyframes in `@theme` |
+| Use it for | Utility |
+|---|---|
+| Page background, content cards, insets and hovers | `bg-bg`, `bg-card`, `bg-surface` |
+| Body text, secondary text, hints | `text-fg`, `text-fg-muted`, `text-fg-faint` |
+| Money in your favour, the primary action, the current page | `accent` (`text-accent`, `bg-accent`; text on it `text-on-accent`) |
+| Something in the estimate needs checking | `warning` |
+| Destructive actions and errors (owing tax is not an error) | `danger` |
+| Bank connections, neutral notes | `info` (text on it `text-on-info`) |
+| Lines | `border-border`, hover `border-border-strong` |
+| Behind dialogs and the drawer | `bg-scrim` |
+| Card radius and shadows | `rounded-card`, `shadow-card`, `shadow-pop` |
+| Motion | `animate-slide-up`, `animate-fade-in`, `animate-slide-in` (all off under reduced motion) |
 
-Opacity modifiers work on all of them: `bg-info/5`, `ring-accent/30`.
-Never write a hex colour or `style={{ color: '#…' }}` in a page; if a colour
-is missing, add it to `:root` and `@theme` together.
+Tints use opacity modifiers: `bg-accent/10`, `border-warning/30`.
 
-Type: `text-xs` (12px) for badges, `text-sm` (14px) for hints, labels and
-notices, base (16px) for body, `text-lg`/`text-xl` for card titles,
-`text-2xl md:text-[2rem]` for the page title, `text-3xl md:text-[2.5rem]`
-for headline figures. Money and other columns of numbers get `tabular-nums`.
+Type: page title `text-2xl md:text-[1.75rem] font-bold`; card title
+`text-base md:text-lg`; body and controls ~15px; hints `text-xs`/`text-sm`.
+Headline figures `text-[1.75rem] md:text-[2rem] font-bold`. Every column of
+numbers gets `tabular-nums`. Sentence case everywhere, uppercase only for the
+small section eyebrows.
 
 ## Layout
 
-`AppShell` (used by `layout.tsx`) owns the frame: a 260px sidebar from `md`
-up, a header with the menu button on phones, and a drawer that closes on
-navigation, overlay tap or Escape. Pages render inside `<main>` with
-`p-4 md:p-8` already applied; do not add page-level padding.
+`AppShell` owns the frame: a sidebar from `lg` up (a drawer below that), a
+sticky header with the **tax-year picker** (one for the whole app) and the
+account button, and `<main>` with padding and a `max-w-6xl` column. Pages add
+no page padding of their own.
 
-Responsive rules, mobile first:
-
-- Stack by default, go multi-column at `md` (or `lg` for two wide cards):
-  `grid gap-4 md:grid-cols-3 md:gap-6`. Two form fields: `<FieldGrid>`
-  (`sm:grid-cols-2`).
-- Anything in a flex row that holds text gets `min-w-0` so it can shrink.
-- Tables scroll inside their own container: wrap in `overflow-x-auto`. On
-  phones prefer a stacked card per row for anything with more than three
-  columns (the deductions ledger).
-- Page-level vertical rhythm is `flex flex-col gap-6 md:gap-8`; inside a card
-  use `gap-3` to `gap-5`.
-- Header actions (year picker, primary button) go in `PageHeader`'s `actions`;
-  they wrap under the title on phones.
-- Modals: `fixed inset-0 z-50` overlay, panel `w-full max-w-lg` on phones
-  growing to `max-w-xl`, scroll inside the panel (`max-h-[90dvh] overflow-y-auto`).
+- Page rhythm: `flex flex-col gap-6`. Cards in a row: `grid gap-4 sm:grid-cols-3`
+  or `lg:grid-cols-2`. A form beside a list: `lg:grid-cols-[minmax(0,22rem)_1fr]`.
+- Anything in a flex row that holds text gets `min-w-0`.
+- Check every page at 375px. Lists stack instead of scrolling sideways; long
+  segmented controls drop their counts below `sm`.
+- Editing one thing happens in a `Dialog`: centred on desktop, a bottom sheet
+  on phones.
 
 ## Components
 
 | Component | Use |
 |---|---|
-| `ui/Card` (`Card`, `CardHeader`, `CardTitle`, `CardDescription`, `DataRow`) | Every surface. `accent` adds the 4px top rule (stat cards only). `hover` only when the card is itself a target. `DataRow` is the label/value strip used for engine line items. |
-| `ui/StatCard` | One headline figure with an uppercase label and a caption naming the form line. Pass an already formatted string. |
-| `ui/Button`, `LinkButton`, `buttonClasses` | The only button. Variants: `primary` (save/submit), `secondary` (everything else), `info` (Plaid), `danger` (delete), `ghost` (icon-only). `loading` shows a spinner and disables. `LinkButton` for navigation. |
-| `ui/Field` (`Field`, `Label`, `Input`, `Select`, `FieldGrid`) | Forms. `Field` owns label/hint/error; controls are plain and composable. |
-| `ui/Badge` | Status pills: Deductible, Plaid, a category label. Tone, not colour. |
-| `ui/PageHeader` | Title, one-sentence description, optional icon badge, `actions` slot. |
-| `ui/Busy` | Wrap content that is loading or refreshing; dims it in place and sets `aria-busy`. Do not swap to a spinner; figures must not jump when the year changes. |
-| `ui/InlineStatus` | The result of an action (`ok`, `error`, `info`) where it happened. Replaces `alert()` and `window.location.reload()`. |
-| `ui/ConfirmDialog` (`useConfirm`) | Ask before anything destructive: `const [confirm, dialog] = useConfirm()`, then `if (!(await confirm({ title, tone: 'danger' }))) return;` and render `{dialog}` once. **Never `window.confirm()`** — it freezes the page's JavaScript while open, which stalls Clerk's background token refresh; a delete confirmed after a long pause can go out on an expired session. |
-| `EstimateNotice` | Disclaimer, warnings, and the assumptions and not-modeled lists — collapsed on screen, always expanded in print. Mandatory next to figures. |
-| `TaxYearSelect` | Year picker fed by the engine's `SUPPORTED_TAX_YEARS`. Every year-scoped page has one in its header; pass the year to every fetch and POST. |
-| `PlaidLinkButton` | Connect / sync. |
-| `SidebarNav`, `AppShell` | Frame. |
+| `ui/Card` (`Card`, `CardHeader`, `CardTitle`, `CardDescription`, `DataRow`) | Every surface. `accent` adds a thin top rule, sparingly. `padding="none"` when a list brings its own. `DataRow` is a label/value line; `emphasis` makes it a total. |
+| `ui/StatCard` | One headline figure: label (may be a `<Term>`), formatted value, one plain caption, optional icon and footer. `captionClassName="hidden sm:block"` when cards sit two to a row on phones. |
+| `ui/PageHeader`, `SectionHeading` | Title, one or two plain sentences on what the page is for, an icon, and the page's main action. |
+| `ui/Button`, `LinkButton`, `buttonClasses` | The only button. `primary` (the one main action), `secondary`, `info` (bank), `danger` (delete), `ghost` (icon-only). `loading` spins and disables. |
+| `ui/Field` (`Field`, `Input`, `MoneyInput`, `Select`, `Checkbox`, `RadioCard`, `FieldGrid`) | Forms. `Field` owns label, `aside` ("Optional", "Box 2"), hint and error. `MoneyInput` shows "$", opens the decimal keypad, and is text, not `type="number"`. |
+| `ui/Callout` | A tinted note inside a page: `warning`, `info`, `success`, `tip`, with an optional action. |
+| `ui/EmptyState` | What an empty list shows: what goes here, why, and the button that adds the first one. Never just "No data". |
+| `ui/SegmentedControl` | Two to four exclusive choices side by side (money in or out, list filters). Native radios underneath. |
+| `ui/ProgressBar` | A fraction from the server or a count, drawn. |
+| `ui/Dialog` | Modal editing panel on a native `<dialog>` (focus trap, Escape, inert page). |
+| `ui/ConfirmDialog` (`useConfirm`) | Ask before anything destructive. **Never `window.confirm()`**: it freezes JavaScript, which stalls Clerk's token refresh (D24). |
+| `ui/Term` | A tax word that explains itself on hover, focus or tap. Definitions live in `src/lib/glossary.ts`; add one there, never inline. |
+| `ui/Badge` | Status pills: Deductible, From your bank, a hustle. |
+| `ui/InlineStatus` | The result of an action, where it happened. Replaces `alert()`. |
+| `ui/Busy`, `Skeleton` | Dim content that is refreshing, in place; placeholders for a first load. |
+| `EstimateNotice` | The disclaimer, the warnings ("Worth checking"), and the assumptions and not-modeled lists, collapsed on screen and expanded in print. |
+| `CategorySelect` | The category picker, grouped by what each category does (`categoryOptions.ts` builds the groups from the engine's treatments). |
+| `HustlePicker` | "Which hustle?" with "Add a new hustle" in place. |
+| `TaxYearSelect`, `useTaxYear`, `useYearHref` | The year lives in the URL (D18). `useYearHref` adds it to in-app links. |
+| `useLoad` | Load data for a key and reload on demand; `loading` is derived and a stale response is dropped. Use one per independent request (D21). |
+| `overview/`, `transactions/`, `jobs/` | Pieces of one page each. |
 
-Helpers: `api.ts` (typed fetchers; `EstimatePayload` is the engine's result
-type after serialisation, so field names are checked at compile time),
-`format.ts` (`formatCurrency`, `formatMiles`, `formatPercent`,
-`categoryLabel`, `filingStatusLabel`, `homeOfficeMethodLabel`, `formatDate`),
-`cn.ts`.
+Helpers: `api.ts` (typed fetchers; the summary and chart types are the
+server's own return types), `format.ts` (currency, miles, percent, dates, the
+mileage rate, `formatLineValue` for engine lines with a unit, labels),
+`moneyText.ts` (`normalizeMoneyText`: strips "$" and well-placed thousands
+separators, passes anything ambiguous to the server to refuse), `cn.ts`.
 
 ## Copy
 
-Describe what the app does. No "loophole", "shield", "bypass", "brutal",
-"aggressively", "annihilation", "legally sheltering". Name the form line a
-number comes from ("Form 1040 line 24", "Schedule 1 line 8r"). The estimate
-runs high because it omits credits; say "estimate", never "bill" or "owed".
-Labels come from the engine's vocabulary via `categoryLabel()`; a raw slug
-such as `other_business_expense` must never render.
+Write for someone who has never done their own taxes.
 
-## Converting a page
+- Plain words first: "Money in", "Money out", "Left to pay", "Safe to spend",
+  "Income & expenses". The form line can follow as a hint ("Box 2",
+  "Form 1040 line 24") where it helps someone copying from a form.
+- Wrap a tax term in `<Term>` the first time it appears on a screen.
+- Say what to do next. Every empty state and warning names the action.
+- It is an estimate that runs high (no credits): "estimate", never "bill".
+- Category and filing-status labels come from the engine (`categoryLabel`,
+  `FILING_STATUS_INFO`); a raw slug never renders.
+- American spelling. No hype ("loophole", "shield", "aggressively").
 
-1. Replace the header with `PageHeader` (+ `TaxYearSelect` if the page is
-   year-scoped; pass `taxYear` to its GETs and POST bodies).
-2. Fetch through `api.ts`; keep the `ignore` flag pattern from the reference
-   pages so a slow response for the previous year cannot overwrite the new one.
-3. Delete every local calculation and read the same value from `estimate`.
-   If the value is not in the payload, that is a Phase 3 (API) conversation,
-   not a reason to compute it in the page.
-4. Cards, fields, buttons, badges from `ui/`. No `style={{}}`.
-5. `EstimateNotice` under the figures. `Busy` around the data region.
-6. Replace `alert()`/`reload()` with `InlineStatus` and a re-fetch, and
-   `confirm()` with `useConfirm`. Browser dialogs block the page; none remain.
-7. Check the phone layout (375px) and the print layout if the page prints.
-   A closed `<details>` does not print its contents — anything a reader of
-   the paper copy needs must have a print-only expanded copy, as
-   `EstimateNotice` does.
-8. A page that loads several things loads them with `Promise.allSettled` and
-   applies each result on its own, so one failing request (usually the
-   estimate) cannot blank data that did load.
-9. Remove any legacy class the page no longer needs from `globals.css`.
+## Checking a page
 
-### Remaining pages
+`/preview/<page>` (dev only) renders the real page with sample data run
+through the real engine, no sign-in needed; `?scenario=new` is an empty
+account. Pages: `overview`, `transactions`, `mileage`, `jobs`, `payments`,
+`education`, `office`, `report`, `profile`. Check light, dark, 1280px and
+375px, and print the report. Writes succeed there without storing anything.
+It shows what the code renders, not what a real account holds: a
+click-through signed in is still the final check.
 
-- **deductions/page.tsx** (1,133 lines). Ledger table needs a stacked layout
-  on phones. Edit modal: keep the Plaid lock on amount and date exactly (the
-  API rejects changes; show the lock message from the response). Mileage form
-  and ledger: read `ratePerMile`, `deduction`, `totalDeduction` from
-  `/api/mileage`, never multiply miles by a rate. Category selects should use
-  labels from `categoryLabel`. Behaviour to re-test after converting: edit a
-  Plaid transaction (only category/deductible change), edit a manual one
-  (amount/date change), delete both kinds, add and delete a mileage entry.
-- **student/page.tsx**. Copy is fixed; layout is not. It still computes
-  `box5 - box1` locally: replace with `estimate.scholarships` (fields:
-  `totalScholarships`, `qualifiedEducationExpenses`,
-  `restrictedToNonQualifiedExpenses`, `taxable`) and
-  `estimate.adjustments.studentLoanInterest` (`tentative`, `reduction`,
-  `deduction`, `disallowedReason`). It posts without a year; add
-  `TaxYearSelect` and send `taxYear`.
-- **export/page.tsx**. Reads the summary and transactions; keep the `.card`
-  and `.print-hide` classes (or their `print:` equivalents) so the print CSS
-  in `globals.css` still applies. `AppShell` is already `print:hidden`.
+## Building a page
 
-## Legacy classes
-
-`globals.css` still defines `.card`, `.text-secondary`, `.text-green`,
-`.text-red` and `.flex-item-center` for the three unconverted pages. Delete
-each once nothing references it. One transitional side effect of Tailwind's
-reset: bullet lists on the unconverted pages lose their bullets until they
-use `list-disc`.
+1. `PageHeader` with an icon and a sentence on what the page is for.
+2. One `useLoad` per request, each with a `useCallback` loader keyed on the
+   tax year, so one failing request cannot blank the others (D21).
+3. Read every figure from a payload; format with `format.ts`.
+4. Components from `ui/`. No `style={{}}` except a width the server computed.
+5. `EstimateNotice` under the figures; `Busy` around data that refreshes.
+6. `InlineStatus` for results, `useConfirm` for deletes, `Dialog` for edits.
+7. An `EmptyState` for every list.
+8. Anything a paper reader needs prints expanded (D25).

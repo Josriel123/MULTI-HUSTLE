@@ -10,9 +10,11 @@ npm test          # vitest
 npm run typecheck # tsc --noEmit
 ```
 
-Entry point: `estimateFederalTax(input)` in `engine.ts`. The route handler at
-`src/app/api/dashboard/summary/route.ts` loads rows, calls
-`buildFederalTaxInput` (`adapters/prismaRows.ts`) and then the engine.
+Entry point: `estimateFederalTax(input)` in `engine.ts`. The summary and chart
+routes load one user's rows for a year (`src/lib/estimateRows.ts`) and hand them
+to `estimateFromRows` (`adapters/estimateFromRows.ts`), which calls
+`buildFederalTaxInput` (`adapters/prismaRows.ts`) and then the engine;
+`src/lib/dashboard.ts` shapes the responses.
 
 ## Scope
 
@@ -161,7 +163,8 @@ not modeled.
 returned in every estimate as `notModeled`. It is maintained, not exhaustive: a
 rule missing from it is not thereby modeled. The largest for this app's users: tax credits
 (EITC, child tax credit, education credits), which can reduce the real
-liability well below the estimate; W-2 wages unless supplied; depreciation;
+liability well below the estimate; the credit for excess Social Security
+withheld by two employers (warned, not subtracted); depreciation;
 the self-employed health insurance deduction; the kiddie tax (a warning is
 raised when it may apply); state tax.
 
@@ -173,7 +176,10 @@ form order, `warnings` (things that changed or limited the number), `assumptions
 `disclaimer` string. `toPlain()` converts it to JSON-safe numbers. The
 disclaimer is part of the output on purpose: nothing can display a liability
 figure from this engine without also receiving the text that qualifies it.
-Phase 4 must render `disclaimer` next to every liability figure.
+Every page that shows a liability figure renders `disclaimer` beside it
+(`EstimateNotice`). Lines whose value is not dollars carry a `unit` (square
+feet, a fraction, miles, dollars per mile), so the tax report formats each one
+correctly.
 
 ## Independent audit (2026-09-09) and the input contract it extended
 
@@ -199,10 +205,22 @@ not reduce the expense it reverses (warning `refund_not_netted`,
 `NOT_MODELED`). The §199A(i) minimum, which this engine had capped at taxable
 income, is now the statutory greater-of with no cap.
 
-None of the new fields has a database column yet; the adapter passes them
-through when a row carries them (`UserTaxProfileRow.spouseItemizes`,
-`Form1098TRow.restrictedToNonQualifiedExpenses`), and the W-2 fields wait for
-a W-2 form in the app.
+Every one of these fields can now be entered in the app (migration
+`20260923000000_w2_payments_profile`). The W-2 fields arrive through the
+adapter, which merges several W-2s into the engine's one:
+
+| Box | Summed across | Why |
+|---|---|---|
+| 1 wages, 2 withholding | every W-2 on the return | Form 1040 lines 1a and 25a |
+| 5 Medicare wages, 6 Medicare withheld | every W-2 on the return, both spouses on a joint return | Form 8959 lines 1 and 19: "If you have more than one Form W-2, enter the total" |
+| 3 Social Security wages, 7 tips | the self-employed person's own W-2s only | Schedule SE line 8a is per individual |
+
+Because the adapter has already separated the spouse's W-2s, it passes
+`ownedByTaxpayer: true`, and the engine's "unconfirmed owner" fallback no longer
+fires from the app. A spouse's W-2 on a return that is not joint is left out
+with a warning. Estimated payments are summed by the tax year they were paid
+for, the adapter says so when paycheck deposits arrive without a W-2, and
+`estimateFromRows` defines the dashboard's "safe to spend" (decision log D29).
 
 ## Adding a tax year
 

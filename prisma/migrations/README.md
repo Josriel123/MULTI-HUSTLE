@@ -12,6 +12,7 @@ schema before and after, so the SQL is reviewable rather than implied by
 | `20260910000000_mileage_log` | Phase 3: the `MileageLog` table. |
 | `20260910000100_form_tax_year` | Phase 3.5: `taxYear` on `Form1098T`, `Form1098E`, `HomeOfficeDeduction` under `@@unique([userId, taxYear])`. |
 | `20260916000000_category_is_source_of_truth` | Data only, no schema change (e2e audit F2). Expense rows with `taxDeductible = false` in a Schedule C category move to `personal`; rows with `taxDeductible = true` and no category get `other_business_expense` (the treatment they already received); then `taxDeductible` is recomputed from the category for every row. Idempotent and null-safe (`COALESCE(category IN (...), false)`). The deductible list must match `DEDUCTIBLE_EXPENSE_CATEGORIES` in `src/lib/tax/categories.ts`; `src/lib/tax/__tests__/migrations.test.ts` runs every migration on PGlite, seeds eleven rows covering each case, and asserts the outcome, the row count, the amount sum, idempotency and the list match. |
+| `20260923000000_w2_payments_profile` | Additive only. `User.spouseItemizes BOOLEAN NOT NULL DEFAULT false`, `User.taxProfileSavedAt TIMESTAMP NULL` (null until the tax profile is saved, so the default filing status is reported as assumed), `Form1098T.restrictedToNonQualifiedExpenses DECIMAL(12,2) NOT NULL DEFAULT 0`, and two tables: `W2Form` (boxes 1, 2, 3, 5, 6, 7 and whose W-2 it is, by tax year) and `EstimatedTaxPayment` (by the tax year paid for). Both reference `User` with `ON DELETE RESTRICT` like every other table, indexed on `(userId, taxYear)`. Identical to what `prisma migrate diff` generates from the live schema; `migrations.test.ts` runs it on PGlite over seeded rows. |
 
 ## Status
 
@@ -47,6 +48,15 @@ with an `uncategorised_expenses` warning; since, the audit row is personal and
 the three rows are deducted as before. The two "gas" rows are worth
 re-categorising as `car_and_truck` by hand so the one-method vehicle rule sees
 them.
+
+**`20260923000000_w2_payments_profile` is committed but not applied.** It is
+additive: existing rows only gain the column defaults. Apply it, then
+regenerate the client with the dev server stopped:
+
+```bash
+npx prisma migrate deploy
+npx prisma generate
+```
 
 ## Applying to another existing database (created with `db push`)
 

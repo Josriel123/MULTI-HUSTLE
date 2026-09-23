@@ -15,11 +15,11 @@ old entry and change nothing else in it.
 
 | Area | Entries |
 |---|---|
-| Scope and process | [D1](#d1) · [D9](#d9) · [D12](#d12) · [D27](#d27) |
-| Data and money | [D2](#d2) · [D3](#d3) · [D10](#d10) · [D15](#d15) · [D20](#d20) · [D22](#d22) |
-| Tax engine | [D8](#d8) · [D11](#d11) · [D13](#d13) · [D14](#d14) · [D17](#d17) |
-| Auth, Plaid and security | [D4](#d4) · [D5](#d5) · [D6](#d6) · [D7](#d7) · [D23](#d23) |
-| UI | [D16](#d16) · [D18](#d18) · [D19](#d19) · [D21](#d21) · [D24](#d24) · [D25](#d25) · [D26](#d26) |
+| Scope and process | [D1](#d1) · [D9](#d9) · [D12](#d12) · [D27](#d27) · [D36](#d36) |
+| Data and money | [D2](#d2) · [D3](#d3) · [D10](#d10) · [D15](#d15) · [D20](#d20) · [D22](#d22) · [D32](#d32) · [D37](#d37) |
+| Tax engine | [D8](#d8) · [D11](#d11) · [D13](#d13) · [D14](#d14) · [D17](#d17) · [D28](#d28) · [D29](#d29) · [D30](#d30) |
+| Auth, Plaid and security | [D4](#d4) · [D5](#d5) · [D6](#d6) · [D7](#d7) · [D23](#d23) · [D31](#d31) |
+| UI | [D16](#d16) · [D18](#d18) · [D19](#d19) · [D21](#d21) · [D24](#d24) · [D25](#d25) · [D26](#d26) · [D33](#d33) · [D34](#d34) · [D35](#d35) · [D38](#d38) |
 
 ---
 
@@ -249,7 +249,7 @@ assumptions.
 caller can show one without the other. A restyle that drops it, or a component
 that recomputes a figure, silently undoes the engine's correctness.
 
-**Where.** `src/components/README.md`. *Extended by [D26](#d26).*
+**Where.** `src/components/README.md`. *Extended by [D26](#d26) and [D34](#d34). Look superseded by [D33](#d33); the rule on tax arithmetic stands.*
 
 ---
 
@@ -378,3 +378,163 @@ contributor must follow live in `AGENTS.md`, below the block Next.js manages;
 text between its `BEGIN`/`END` markers in `AGENTS.md` and leaves the rest alone
 (checked in `node_modules/next/dist/server/lib/generate-agent-files.js`), so
 content below the block is stable.
+
+---
+
+## 2026-09-23 — The missing inputs, and a redesign for new users
+
+### <a id="d28"></a>D28 · W-2s and estimated payments are entered as forms; a paycheck is never wages
+
+**Decision.** W-2s (`W2Form`, several per year) and estimated payments
+(`EstimatedTaxPayment`, filed under the tax year paid *for*) are entered on
+their own pages. The adapter merges several W-2s into the engine's one:
+boxes 1, 2, 5 and 6 are summed across the return (Form 1040 lines 1a and 25a;
+Form 8959 lines 1 and 19, "if you have more than one Form W-2, enter the
+total"), boxes 3 and 7 only across the self-employed person's own W-2s
+(Schedule SE line 8a is per person). A spouse's W-2 counts only on a joint
+return, and is left out with a warning on any other status. A bank deposit
+categorised as a paycheck is still excluded from income: once a W-2 is on
+file that is an assumption, and without one it is a warning that wages and
+withholding are missing.
+
+**Why.** The engine accepted these inputs from Phase 2, but nothing stored
+them, so every estimate assumed zero wages, zero withholding and zero
+payments. A net paycheck understates wages and loses the withholding, which is
+why deposits never stand in for the form.
+
+**Alternative.** Summing every box across every W-2 would have let a spouse's
+wages erase the self-employed spouse's Social Security base; the test for
+that case shows the difference (`w2-payments-adapter.test.ts`). Excess Social
+Security withheld by two employers (Schedule 3 line 11) is warned about with
+its approximate amount, not subtracted.
+
+**Where.** `src/lib/tax/adapters/prismaRows.ts` (`mergeW2Forms`), migration
+`20260923000000_w2_payments_profile`, `/api/w2`, `/api/payments`.
+
+### <a id="d29"></a>D29 · "Safe to spend" subtracts what is still owed, not the whole tax
+
+**Decision.** Safe to spend is deposits counted as income, less every expense,
+less estimated payments already sent, less the balance still due (never a
+refund). With no W-2 and no payments it equals the old figure.
+
+**Why.** The old formula (income − expenses − total tax) charged the tax on a
+W-2 job's wages to the hustle money even though the employer had already
+withheld it from wages that never reached these deposits. Recording a payment
+now leaves the figure unchanged, as it should: cash and the balance due fall by
+the same amount. A refund is not spendable until it arrives.
+
+**Where.** `src/lib/tax/adapters/estimateFromRows.ts`.
+
+### <a id="d30"></a>D30 · A tax profile nobody saved is an assumption, not a choice
+
+**Decision.** `User.taxProfileSavedAt` is null until the Tax profile page is
+saved. Until then the adapter treats the stored filing status as the column
+default and the estimate says it assumed single.
+
+**Why.** Every row has `filingStatus = 'single'` from the column default, so
+the estimate reported "filing as single (from your profile)" for people who
+had never been asked. The setup checklist uses the same flag.
+
+**Where.** `src/lib/tax/adapters/prismaRows.ts`, `/api/profile`.
+
+### <a id="d31"></a>D31 · Hustles are labels the user names; bank sync no longer invents them
+
+**Decision.** A hustle (`IncomeSource`) groups income on the overview and
+nothing else; the category still decides the tax (D17). Plaid sync no longer
+creates one per deposit description. A new deposit joins a hustle only when its
+description names one the user created ("Uber" matches "Uber 072515
+SF**POOL**", as whole words, longest name first), and the sync never changes a
+row's hustle after that. Renaming a hustle to another's name merges the two;
+deleting one leaves its transactions unassigned.
+
+**Why.** The old sync created a hustle for every distinct deposit string and
+reset it on every sync, so the list filled with bank descriptions and the
+user's corrections were undone. Existing rows keep those hustles; the rename
+merge is how they are tidied.
+
+**Where.** `src/lib/hustles.ts`, `/api/sources`, `src/app/api/plaid/sync/route.ts`.
+
+### <a id="d32"></a>D32 · Account deletion covers every table with a user id, enforced by a test
+
+**Decision.** The Clerk `user.deleted` webhook deletes from every model with a
+`userId`, rows that reference an income source first.
+`clerk-webhook-delete.test.ts` reads `schema.prisma` and fails when a model
+with a `userId` is missing from the list.
+
+**Why.** `MileageLog` was never added to it, and every relation is `ON DELETE
+RESTRICT`, so deleting any account with a logged trip failed.
+
+### <a id="d33"></a>D33 · The UI is redesigned around a person, light by default
+
+**Decision.** Supersedes the look in [D16](#d16) (its rule on tax arithmetic
+stands). Light by default and dark when the system asks, from one token set in
+`globals.css`; components never type a colour. Navigation is grouped by what a
+person is doing (Your money, Tax breaks, Your estimate), with one tax-year
+picker in the header. Pages are named in plain English and old URLs redirect.
+Tax words on screen explain themselves (`<Term>`), with definitions in
+`src/lib/glossary.ts` that quote rates only from engine constants
+([D26](#d26)). A new account sees a three-step setup checklist.
+
+**Why.** The owner's judgement after using it: a new user would have no idea
+what the app was for or what to do first. The dashboard led with developer
+status, the navigation named tax forms, and the pages assumed the reader knew
+what Schedule C was.
+
+**Where.** `src/components/README.md`.
+
+### <a id="d34"></a>D34 · Display ratios come from the server too
+
+**Decision.** Extends [D16](#d16): shares for bars and progress (each hustle's
+share of income, the share of tax already paid) and the split of the balance
+into "left to pay" and "refund" are computed in `src/lib/dashboard.ts`, with
+`Decimal`, and sent with the summary.
+
+**Why.** A page that divides money to size a bar is one small step from a page
+that computes a tax figure. Keeping every operation on money server-side keeps
+the rule simple to check: no arithmetic on money in a `.tsx` file, at all.
+
+### <a id="d35"></a>D35 · The chart stops at the current month for the current year
+
+**Decision.** For the current year the chart ends at the current month, and a
+W-2's amounts are spread evenly over the months shown. Its last point takes
+everything, so it still equals the summary.
+
+**Why.** A W-2 entered mid-year holds year-to-date figures. Spread over twelve
+months, it drew wages rising through months that had not happened.
+
+### <a id="d36"></a>D36 · A dev-only preview renders every page with sample data
+
+**Decision.** `/preview/<page>` renders the real pages behind a fetch
+interceptor that answers `/api/` calls from fixture rows, run through the real
+adapter and engine in the browser. It 404s in production, and the proxy lets
+it past sign-in only outside production.
+
+**Why.** Pages behind sign-in could not be checked or screenshotted without an
+account, and an agent must not sign in (see `CLAUDE.md`). The preview shows
+what the code renders; it cannot show what real data looks like, so a
+click-through on a real account is still needed.
+
+**Where.** `src/app/preview/[[...page]]/`.
+
+### <a id="d37"></a>D37 · A third decimal place is refused
+
+**Decision.** Extends [D20](#d20): `parseMoneyInput` refuses an amount with
+more than two decimal places, and the mileage route refuses miles the
+`DECIMAL(10,2)` column cannot hold and dates that do not exist.
+
+**Why.** Postgres rounds a third decimal away without a word, and
+`new Date('2025-02-30')` is March 2: the same silent rewrite D20 removed
+elsewhere.
+
+### <a id="d38"></a>D38 · The tax report replaces the CPA organizer
+
+**Decision.** `/report` prints Schedule C by form line with the amount
+entered and the amount deducted, the W-2s, payments, education forms, every
+engine line with its unit (square feet, percentages and miles are no longer
+shown as dollars), the disclosures expanded ([D25](#d25)) and the provenance
+count ([D19](#d19)). The CSV is built from a `Blob`.
+
+**Why.** The organizer grouped Schedule C by income-source type and labelled
+the amounts entered as "deductible operating expenses", which overstated them
+wherever a limit applied (meals at 50%, the vehicle method). Its CSV was a
+`data:` URI, which a `#` in any description cut short.

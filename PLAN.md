@@ -136,12 +136,20 @@ Fixed after the second end-to-end pass (2026-09-23, `docs/audits/e2e-2026-09-18/
 - The mileage rate card reads the year's rates from the engine instead of a `'0.725'` typed into the component (S2, D26); `GET /api/mileage` is scoped to the tax year even when the request omits it, which it previously was not.
 - No browser dialogs remain (D24). The Deductions page loads independently like the others (D21).
 
-Still open (verified 2026-09-23):
+Done in the redesign (2026-09-23, branch `ui-redesign`, D28–D38):
+- **Every screen rebuilt for a first-time user**: light and dark themes, grouped navigation, a setup checklist, tax words that explain themselves, one tax-year picker in the header. Checked at `/preview` with sample data in light and dark, at 1280px and 375px.
+- **The five optional inputs can be entered**, and more: W-2s (several per year, boxes 1–7, whose on a joint return), estimated payments, the tax profile (filing status, dependent, spouse itemizes), and grant money reserved for room and board.
+- The mileage card shows what Schedule C took for the car, whichever method won.
+- Per-source "deductible expenses" (entered, not allowed) are gone: the tax report shows Schedule C by line, entered and deducted.
+- Account deletion no longer fails on `MileageLog` rows (D32).
+- Plaid sync no longer creates a hustle per deposit description or resets the user's choice (D31).
+- `dev.db` and `prisma/dev.db` are untracked (commit `c1ae8d2`).
+
+Still open (2026-09-23):
+- **Migration `20260923000000_w2_payments_profile` is committed, not applied.** Before running the new code against Neon: `npx prisma migrate deploy`, then `npx prisma generate` with the dev server stopped, then restart it. Until then every page that loads the estimate fails, because the new tables do not exist.
 - **Not deployed.** Nothing has been pushed since April: `origin/master` still holds the pre-rebuild app. Shipping needs a Clerk production instance, a Neon production branch, the Clerk webhook secret, and hosting — the owner's call.
-- **Step 1's UI is untested in a browser.** The confirm dialog, the mileage rate card and the printed disclosures are covered by tests of their logic and markup, but no one has clicked through them.
-- **The mileage card shows the standard-rate value even when actual vehicle costs win.** The engine then deducts the actual costs and none of the mileage (Pub. 463, one method per vehicle) and warns; the card's caption says so, but its figure should be what Schedule C took — the summary already exposes `sources.delivery.vehicleMethod` and `mileageDeduction`.
-- **Per-source "deductions" are amounts entered, not allowed.** The engine applies the 50% meals limit and the de minimis equipment cap per category, so a per-source figure on the dashboard and organizer can exceed what Schedule C took. Needs per-source attribution in the engine, or a relabel.
-- **The five optional inputs added in Phase 2 cannot be entered:** W-2 box 7 tips, W-2 box 6 Medicare withholding, joint-return W-2 ownership, the MFS spouse-itemizes flag, and restricted scholarship amounts have no column and no field. The engine accepts them and warns when a missing one matters, so estimates are safe but less precise.
+- **No signed-in click-through of the redesign.** It was checked with sample data at `/preview`; nobody has used it on a real account yet.
+- **Hustles made by the old sync** (one per deposit description, such as "Uber 063015 SF**POOL**") are still on the populated account. Tidy them under Income & expenses → Hustles: renaming one to another's name merges the two.
 - **Re-link adoption has not run live.** The matching was verified read-only against the 15 real legacy rows (15 of 15); a same-item replay on a test account would test the rest. Never re-link the populated sandbox account (D23).
 - **An orphaned demo user** (cuid id, 4 transactions) from the pre-rebuild seed script is invisible to the app and safe to delete.
-- **`dev.db` and `prisma/dev.db` are still tracked** — stale SQLite files from before the rebuild. `git rm --cached dev.db prisma/dev.db`; the agent's permission classifier blocks it.
+- **Legal documents** (terms of use, privacy notice) are next, per the owner.

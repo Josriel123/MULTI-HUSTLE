@@ -20,9 +20,11 @@ everything outside its markers alone.
 
 ## Invariants
 
-1. **No tax arithmetic or tax facts in a `.tsx` file.** Pages read the
-   estimate payload; rates, thresholds and citations come from the engine's
-   parameters through the API. (D16, D26)
+1. **No arithmetic on money and no tax facts in a `.tsx` file.** Pages read
+   the estimate payload; rates, thresholds and citations come from the
+   engine's parameters or constants. Even display ratios (bar widths, the
+   share already paid) and totals are computed on the server, in
+   `src/lib/dashboard.ts` or the route. (D16, D26, D34)
 2. **Money is `Decimal` end to end.** Never compare money as a JavaScript
    number — build a `Prisma.Decimal` from `toFixed(2)`. Over the wire it is a
    decimal string, formatted at the render edge. (D2, D15, D22)
@@ -42,6 +44,15 @@ everything outside its markers alone.
 9. **Anything a paper reader needs prints expanded.** A closed `<details>`
    does not print. (D25)
 10. **Proxy is optimistic; every route handler authenticates itself.** (D7)
+11. **Colours are tokens.** Components use the utilities backed by
+    `src/app/globals.css`, never a typed colour; a new colour goes into the
+    light block, the dark block and `@theme` together. (D33)
+12. **Tax words on screen explain themselves.** Wrap one in `<Term>`; its
+    definition lives in `src/lib/glossary.ts` and quotes rates only from
+    engine constants. (D33)
+13. **Paychecks are never wages.** Wages come from W-2s; a spouse's W-2
+    counts only on a joint return; Social Security boxes are per person.
+    (D28)
 
 ## Data safety
 
@@ -52,6 +63,8 @@ everything outside its markers alone.
   regenerates its history on every link, so the account would show it twice.
   Use a fresh test user. (D23)
 - `prisma/seed.ts` requires `SEED_USER_ID` and touches only that user.
+- A new model with a `userId` must be added to the Clerk `user.deleted`
+  webhook; `clerk-webhook-delete.test.ts` fails until it is. (D32)
 
 ## Process
 
@@ -59,5 +72,9 @@ everything outside its markers alone.
 - A bug fix starts with a test that fails against the code it replaces.
 - Record a decision in `docs/decision-log.md`, and update `README.md` and this
   file in the same commit wherever the decision changes what they say. (D27)
-- On Windows, stop `next dev` before `next build` or `prisma generate`; both
-  need files the dev server holds open.
+- Check a UI change at `/preview/<page>` (dev only, sample data through the
+  real engine) in light and dark, at 1280px and 375px. It shows what the code
+  renders; a signed-in click-through is still the final check. (D36)
+- On Windows, stop `next dev` before `prisma generate` (and restart it after):
+  the dev server holds the query engine open. `next build` has failed the
+  same way.
