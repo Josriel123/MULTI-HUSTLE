@@ -79,9 +79,11 @@ export default function PrivacyPolicyPage() {
                 numbers.
               </p>
               <p>
-                <strong className="text-fg">From your bank, only if you connect one.</strong> Through Plaid, for each transaction: the date, the amount and
-                the description your bank shows. We also keep the access token Plaid issues for the connection, encrypted, and Plaid&rsquo;s identifier for
-                it. We never see or store your bank login, and we do not store account numbers or balances.
+                <strong className="text-fg">From your bank, only if you connect one.</strong> Through Plaid, for each bank you connect: its name. For each
+                transaction: the date, the amount, the description your bank shows, which of your accounts it is in (Plaid&rsquo;s identifier for the
+                account, not its number) and the category Plaid gives it, such as a transfer, which we use only to point out deposits that look like money
+                moved between your own accounts. We also keep the access token Plaid issues for each connection, encrypted, and Plaid&rsquo;s identifier
+                for it. We never see or store your bank login, and we do not store account numbers or balances.
               </p>
               <p>
                 <strong className="text-fg">Your agreement.</strong> Which version of the Terms of Service and this policy you agreed to, when, and that you

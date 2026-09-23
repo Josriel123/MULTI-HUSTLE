@@ -13,7 +13,7 @@ vi.mock('@/lib/plaid', () => ({
 }));
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    plaidConnection: { findFirst: vi.fn(), update: vi.fn() },
+    plaidConnection: { findMany: vi.fn(), update: vi.fn() },
     incomeSource: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]), create: vi.fn() },
     transaction: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
   },
@@ -40,9 +40,9 @@ const TXN = {
 
 function arrangeSync() {
   vi.mocked(requireUser).mockResolvedValue('user_test');
-  vi.mocked(prisma.plaidConnection.findFirst).mockResolvedValue({
-    id: 'conn1', accessToken: 'access-sandbox-x', cursor: 'abc',
-  } as never);
+  vi.mocked(prisma.plaidConnection.findMany).mockResolvedValue([
+    { id: 'conn1', accessToken: 'access-sandbox-x', cursor: 'abc', institutionId: 'ins_1', institutionName: 'First Platypus Bank' },
+  ] as never);
   vi.mocked(plaidClient.transactionsSync).mockResolvedValue({
     data: { added: [TXN], modified: [], removed: [], has_more: false, next_cursor: 'def' },
   } as never);

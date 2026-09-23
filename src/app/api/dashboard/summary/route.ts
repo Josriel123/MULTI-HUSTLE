@@ -4,6 +4,7 @@ import { summaryPayload } from '@/lib/dashboard';
 import { loadEstimateRows } from '@/lib/estimateRows';
 import { TaxInputError } from '@/lib/tax';
 import { resolveTaxYear } from '@/lib/taxYear';
+import { transferWarnings } from '@/lib/transfers';
 
 /**
  * GET /api/dashboard/summary[?taxYear=YYYY]
@@ -28,7 +29,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const rows = await loadEstimateRows(userId, resolved.taxYear);
-    return NextResponse.json(summaryPayload(rows, resolved.warnings));
+    // Deposits that look like moves between the user's own accounts are still
+    // counted as income until they say so; the estimate says that (D52).
+    return NextResponse.json(summaryPayload(rows, [...resolved.warnings, ...transferWarnings(rows.transactions)]));
   } catch (error) {
     if (error instanceof TaxInputError) {
       // Bad stored data (a negative box amount, an office larger than the home). Say what, not just that.

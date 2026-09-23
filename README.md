@@ -212,6 +212,11 @@ public/third-party-notices.txt   Licences of the packages the app is built on (n
   under every estimate and in the printed report.
 - **Estimated payments are recorded, not sent,** and the estimate does not work
   out due dates or underpayment penalties.
+- **Several banks, one Plaid environment.** Each bank a person uses is its own
+  connection (all accounts at one bank come in together); the same bank cannot
+  be connected twice, and deposits that look like transfers between their own
+  accounts are flagged for them to confirm. A bank whose login expires cannot
+  be re-authorised in place yet.
 - **Plaid sandbox only.** Its sample data is regenerated whenever a bank is
   linked, so re-linking an existing test account duplicates its history —
   start a new test user for fresh bank data.

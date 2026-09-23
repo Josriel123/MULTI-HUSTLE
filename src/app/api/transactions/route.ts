@@ -7,6 +7,7 @@ import { resolveTaxYear } from '@/lib/taxYear';
 import { parseMoneyInput } from '@/lib/validation';
 import { isHustleKind, parseHustleName } from '@/lib/hustles';
 import { findOrCreateHustle, ownedHustle } from '@/lib/hustleStore';
+import { likelyTransferIds } from '@/lib/transfers';
 
 /**
  * Money-over-the-wire contract:
@@ -136,9 +137,12 @@ export async function GET(request: NextRequest) {
       include: { incomeSource: true },
     });
 
+    // A suggestion for the list, never a treatment: see src/lib/transfers.ts (D52).
+    const likelyTransfers = likelyTransferIds(transactions);
     const formatted = transactions.map((tx) => ({
       ...tx,
       amount: tx.amount.toFixed(2),
+      possibleTransfer: likelyTransfers.has(tx.id),
     }));
 
     return NextResponse.json(formatted);

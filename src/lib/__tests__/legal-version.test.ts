@@ -20,8 +20,10 @@ import { LEGAL, SERVICE_PROVIDERS } from '../legal';
  *    current version, and say so in the commit message.
  */
 const AGREED: Record<string, string> = {
-  // Re-recorded when Florida law and Miami-Dade courts were named, before anyone had agreed (docs/legal-changelog.md).
-  '2026-09-23': '136918de3eced907',
+  // Re-recorded before anyone had agreed: Florida law and Miami-Dade courts
+  // named; several banks, with the bank's name, the account and Plaid's
+  // category collected (docs/legal-changelog.md).
+  '2026-09-23': '416d8801f3ab4ff2',
 };
 
 function fingerprint(): string {

@@ -2,6 +2,7 @@ import { chartPayload, summaryPayload, type EstimateInputRows } from '@/lib/dash
 import { computeStandardMileageDeduction, getTaxYearParameters, isDeductibleExpenseCategory, ZERO } from '@/lib/tax';
 import type { AgreementStatus, HustleItem, PaymentItem, TransactionItem, W2Item } from '@/components/api';
 import { LEGAL } from '@/lib/legal';
+import { likelyTransferIds, transferWarnings, type TransferCandidate } from '@/lib/transfers';
 
 /**
  * Sample accounts for the dev-only preview (see page.tsx). Deterministic: no
@@ -27,16 +28,23 @@ const hustle = (id: string) => {
   return { id: h.id, name: h.name, type: h.type };
 };
 
-function demoTransactions(): TransactionItem[] {
-  const out: TransactionItem[] = [];
+/** A sample row, with the bank facts the transfer check reads (the API sends them too). */
+type SampleTransaction = TransactionItem & { plaidAccountId?: string | null; plaidCategory?: string | null };
+
+function demoTransactions(): SampleTransaction[] {
+  const out: SampleTransaction[] = [];
   let n = 0;
-  const add = (t: Omit<TransactionItem, 'id' | 'taxDeductible' | 'plaidTransactionId'> & { plaid?: boolean }) => {
-    const { plaid, ...rest } = t;
+  const add = (
+    t: Omit<TransactionItem, 'id' | 'taxDeductible' | 'plaidTransactionId'> & { plaid?: boolean; account?: string; plaidCategory?: string },
+  ) => {
+    const { plaid, account, plaidCategory, ...rest } = t;
     out.push({
       ...rest,
       id: `tx_${++n}`,
       taxDeductible: rest.type === 'Expense' && isDeductibleExpenseCategory(rest.category),
       plaidTransactionId: plaid ? `plaid_${n}` : null,
+      plaidAccountId: plaid ? (account ?? 'acc_checking') : null,
+      plaidCategory: plaidCategory ?? null,
     });
   };
 
@@ -91,6 +99,10 @@ function demoTransactions(): TransactionItem[] {
   add({ amount: '6.33', type: 'Income', date: at(9, 14), description: 'Uber 091426 SF**POOL**', category: null, incomeSource: hustle('h_uber'), plaid: true });
   add({ amount: '89.40', type: 'Expense', date: at(9, 12), description: 'SPARKFUN ELECTRONICS', category: null, incomeSource: null, plaid: true });
   add({ amount: '14.75', type: 'Expense', date: at(9, 16), description: 'STARBUCKS STORE 1123', category: null, incomeSource: null, plaid: true });
+  // Money moved from checking to savings at the second bank: both legs came in
+  // from the bank, so the list flags the deposit as a likely transfer (D52).
+  add({ amount: '300.00', type: 'Expense', date: at(9, 9), description: 'Online transfer to savings', category: null, incomeSource: null, plaid: true, plaidCategory: 'TRANSFER_OUT' });
+  add({ amount: '300.00', type: 'Income', date: at(9, 10), description: 'Online transfer from checking', category: null, incomeSource: null, plaid: true, account: 'acc_savings', plaidCategory: 'TRANSFER_IN' });
 
   return out.sort((a, b) => b.date.localeCompare(a.date));
 }
@@ -214,15 +226,22 @@ export function previewAgreement(needsAgreement: boolean): AgreementStatus {
   };
 }
 
+/** The sample rows as the transfer check reads them (dates as Dates). */
+function transferCandidates(d: PreviewData): TransferCandidate[] {
+  return (d.transactions as SampleTransaction[]).map((t) => ({ ...t, date: new Date(t.date) }));
+}
+
 /** What each GET the pages make would return. */
 export function previewResponse(d: PreviewData, path: string): unknown {
   switch (path) {
     case '/api/dashboard/summary':
-      return summaryPayload(estimateRows(d));
+      return summaryPayload(estimateRows(d), transferWarnings(transferCandidates(d)));
     case '/api/dashboard/chart':
       return chartPayload(estimateRows(d));
-    case '/api/transactions':
-      return d.transactions;
+    case '/api/transactions': {
+      const likely = likelyTransferIds(transferCandidates(d));
+      return d.transactions.map((t) => ({ ...t, possibleTransfer: likely.has(t.id) }));
+    }
     case '/api/sources':
       return d.hustles;
     case '/api/profile':
@@ -239,8 +258,15 @@ export function previewResponse(d: PreviewData, path: string): unknown {
       return { taxYear: d.year, form: d.form1098E };
     case '/api/deductions/office':
       return { taxYear: d.year, form: d.office };
-    case '/api/plaid/status':
-      return { linked: d.transactions.some((t) => t.plaidTransactionId), linkedAt: null, hasSynced: true, environment: 'sandbox' };
+    case '/api/plaid/status': {
+      const connections = d.transactions.some((t) => t.plaidTransactionId)
+        ? [
+            { id: 'conn_1', institutionName: 'First Platypus Bank', linkedAt: at(1, 2), hasSynced: true },
+            { id: 'conn_2', institutionName: 'Tartan Bank', linkedAt: at(6, 1), hasSynced: true },
+          ]
+        : [];
+      return { linked: connections.length > 0, linkedAt: connections[0]?.linkedAt ?? null, hasSynced: connections.length > 0, connections, environment: 'sandbox' };
+    }
     case '/api/account':
       return { agreement: previewAgreement(false) };
     case '/api/plaid/create_link_token':

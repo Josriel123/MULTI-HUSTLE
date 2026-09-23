@@ -18,8 +18,10 @@ Policy, data deletion page, accessibility statement and licenses page.
 - Service run by an individual in the United States, for users 18 and older
   in the United States. No paid features; no payment details collected.
 - Collected: account details through Clerk; what the user enters; bank
-  transactions through Plaid only if the user connects a bank; the agreement
-  and age-confirmation record. No analytics, advertising or tracking; only
+  transactions through Plaid only if the user connects a bank (for each bank
+  its name, and for each transaction which account it is in and Plaid's
+  category, used only to point out likely transfers; added before anyone had
+  agreed); the agreement and age-confirmation record. No analytics, advertising or tracking; only
   essential cookies and browser storage.
 - Rights: download and delete in the app, or by email with a 30-day reply.
   Deleting an account revokes bank access at Plaid; backups expire within 30

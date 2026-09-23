@@ -7,7 +7,10 @@ vi.mock('@/lib/userData', () => ({ disconnectBanks: vi.fn() }));
 
 import { auth } from '@clerk/nextjs/server';
 import { disconnectBanks } from '@/lib/userData';
-import { POST } from '../plaid/disconnect/route';
+import { POST as disconnect } from '../plaid/disconnect/route';
+
+const POST = (body?: unknown) =>
+  disconnect(new Request('http://localhost/api/plaid/disconnect', { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) }));
 
 type AuthReturn = Awaited<ReturnType<typeof auth>>;
 
@@ -22,7 +25,7 @@ describe('POST /api/plaid/disconnect', () => {
     const res = await POST();
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ disconnected: true, connectionsRemoved: 1, revokedAtPlaid: true });
-    expect(disconnectBanks).toHaveBeenCalledWith('user_me');
+    expect(disconnectBanks).toHaveBeenCalledWith('user_me', undefined);
   });
 
   it('still disconnects when Plaid fails, and says Plaid did not confirm', async () => {
@@ -38,6 +41,20 @@ describe('POST /api/plaid/disconnect', () => {
     const res = await POST();
     expect(res.status).toBe(500);
     expect((await res.json()).error).toMatch(/Could not disconnect/);
+  });
+
+  it('disconnects one bank when asked for it by id', async () => {
+    vi.mocked(disconnectBanks).mockResolvedValue({ plaidItemsRevoked: 1, plaidErrors: [], connectionsRemoved: 1 });
+    const res = await POST({ connectionId: 'conn_2' });
+    expect(res.status).toBe(200);
+    expect(disconnectBanks).toHaveBeenCalledWith('user_me', 'conn_2');
+  });
+
+  it("is 404 for a bank that is not connected (or not this user's), and 400 for a malformed id", async () => {
+    vi.mocked(disconnectBanks).mockResolvedValue({ plaidItemsRevoked: 0, plaidErrors: [], connectionsRemoved: 0 });
+    expect((await POST({ connectionId: 'someone_elses' })).status).toBe(404);
+    expect((await POST({ connectionId: 42 })).status).toBe(400);
+    expect((await POST({ connectionId: '' })).status).toBe(400);
   });
 
   it('is 401 when signed out, and touches nothing', async () => {

@@ -297,3 +297,60 @@ describe('migration 20260924000000_consent_record', () => {
     ]);
   });
 });
+
+/**
+ * Several banks per user (D52): four nullable columns and nothing else, so
+ * the release serving while it is applied (which knows none of them) keeps
+ * working, and existing connections and rows come through unchanged.
+ */
+describe('migration 20260925000000_multiple_banks', () => {
+  const NEW = '20260925000000_multiple_banks';
+  let db: PGlite;
+
+  beforeAll(async () => {
+    db = new PGlite();
+    const dirs = migrationDirs();
+    expect(dirs).toContain(NEW);
+    for (const dir of dirs) {
+      if (dir === NEW) break;
+      await db.exec(sqlOf(dir));
+    }
+    await db.exec(`
+      INSERT INTO "User" (id, name, email) VALUES ('user_1', 'Ana', 'ana@example.com');
+      INSERT INTO "PlaidConnection" (id, "userId", "accessToken", "itemId", cursor) VALUES ('c1', 'user_1', 'v1:abc', 'item_1', 'cur');
+      INSERT INTO "Transaction" (id, amount, type, date, description, "taxDeductible", category, "userId", "plaidTransactionId") VALUES
+        ('t1', 500.00, 'Income', '2026-03-01', 'Transfer from savings', false, NULL, 'user_1', 'p1'),
+        ('t2', 42.10, 'Expense', '2026-03-02', 'Gas', true, 'car_and_truck', 'user_1', NULL);
+    `);
+    await db.exec(sqlOf(NEW));
+  }, 60_000);
+
+  afterAll(async () => {
+    await db?.close();
+  });
+
+  it('adds the bank and the account columns as nullable, with nothing filled in', async () => {
+    const cols = await db.query<{ table_name: string; column_name: string; is_nullable: string }>(
+      `SELECT table_name, column_name, is_nullable FROM information_schema.columns
+       WHERE column_name IN ('institutionId', 'institutionName', 'plaidAccountId', 'plaidCategory') ORDER BY table_name, column_name`,
+    );
+    expect(cols.rows).toEqual([
+      { table_name: 'PlaidConnection', column_name: 'institutionId', is_nullable: 'YES' },
+      { table_name: 'PlaidConnection', column_name: 'institutionName', is_nullable: 'YES' },
+      { table_name: 'Transaction', column_name: 'plaidAccountId', is_nullable: 'YES' },
+      { table_name: 'Transaction', column_name: 'plaidCategory', is_nullable: 'YES' },
+    ]);
+    const conn = await db.query<Record<string, unknown>>('SELECT "institutionId", "institutionName", cursor FROM "PlaidConnection"');
+    expect(conn.rows).toEqual([{ institutionId: null, institutionName: null, cursor: 'cur' }]);
+  });
+
+  it('leaves every existing row as it was', async () => {
+    const rows = await db.query<Record<string, unknown>>(
+      'SELECT id, amount::text AS amount, category, "taxDeductible", "plaidTransactionId", "plaidAccountId", "plaidCategory" FROM "Transaction" ORDER BY id',
+    );
+    expect(rows.rows).toEqual([
+      { id: 't1', amount: '500.00', category: null, taxDeductible: false, plaidTransactionId: 'p1', plaidAccountId: null, plaidCategory: null },
+      { id: 't2', amount: '42.10', category: 'car_and_truck', taxDeductible: true, plaidTransactionId: null, plaidAccountId: null, plaidCategory: null },
+    ]);
+  });
+});

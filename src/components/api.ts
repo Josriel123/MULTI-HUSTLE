@@ -107,6 +107,12 @@ export interface TransactionItem {
   category: string | null;
   plaidTransactionId: string | null;
   incomeSource: IncomeSourceItem | null;
+  /**
+   * Set by the server on an uncategorised bank deposit whose twin left another
+   * of the user's accounts (src/lib/transfers.ts). A suggestion for the list;
+   * it changes nothing until the user picks a category.
+   */
+  possibleTransfer?: boolean;
 }
 
 /**
@@ -441,6 +447,20 @@ export interface AgreementStatus {
   acceptedAt: string | null;
   adultConfirmedAt: string | null;
   needsAgreement: boolean;
+}
+
+/** One connected bank (GET /api/plaid/status). */
+export interface BankConnection {
+  id: string;
+  /** Null for a connection made before banks were recorded, until its next sync. */
+  institutionName: string | null;
+  linkedAt: string;
+  hasSynced: boolean;
+}
+
+/** GET /api/plaid/status */
+export async function fetchPlaidStatus(): Promise<{ connections: BankConnection[]; environment: string }> {
+  return readJson(await fetch('/api/plaid/status', { cache: 'no-store' }));
 }
 
 /** GET /api/account */

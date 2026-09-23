@@ -19,8 +19,11 @@ import { prisma } from './prisma';
  * the user's data, or the access token, on file. Failures are returned so the
  * caller can say so; the caller deletes the rows regardless.
  */
-async function revokePlaidItems(userId: string): Promise<{ plaidItemsRevoked: number; plaidErrors: string[] }> {
-  const connections = await prisma.plaidConnection.findMany({ where: { userId }, select: { accessToken: true } });
+async function revokePlaidItems(userId: string, connectionId?: string): Promise<{ plaidItemsRevoked: number; plaidErrors: string[] }> {
+  const connections = await prisma.plaidConnection.findMany({
+    where: { userId, ...(connectionId ? { id: connectionId } : {}) },
+    select: { accessToken: true },
+  });
   let plaidItemsRevoked = 0;
   const plaidErrors: string[] = [];
   for (const connection of connections) {
@@ -35,15 +38,18 @@ async function revokePlaidItems(userId: string): Promise<{ plaidItemsRevoked: nu
 }
 
 /**
- * "Disconnect bank": revoke each connection at Plaid, then forget the access
- * tokens. The transactions already brought in are the user's records and
- * stay; they can delete them like any other row.
+ * "Disconnect": revoke a connection at Plaid, then forget its access token;
+ * one bank when `connectionId` is given (scoped to the user, so another
+ * user's id matches nothing), otherwise all of them. The transactions already
+ * brought in are the user's records and stay; they can delete them like any
+ * other row.
  */
 export async function disconnectBanks(
   userId: string,
+  connectionId?: string,
 ): Promise<{ plaidItemsRevoked: number; plaidErrors: string[]; connectionsRemoved: number }> {
-  const revoked = await revokePlaidItems(userId);
-  const { count } = await prisma.plaidConnection.deleteMany({ where: { userId } });
+  const revoked = await revokePlaidItems(userId, connectionId);
+  const { count } = await prisma.plaidConnection.deleteMany({ where: { userId, ...(connectionId ? { id: connectionId } : {}) } });
   return { ...revoked, connectionsRemoved: count };
 }
 
@@ -101,7 +107,7 @@ export async function exportUserData(userId: string) {
     prisma.form1098T.findMany({ where: { userId }, orderBy: { taxYear: 'asc' } }),
     prisma.form1098E.findMany({ where: { userId }, orderBy: { taxYear: 'asc' } }),
     prisma.homeOfficeDeduction.findMany({ where: { userId }, orderBy: { taxYear: 'asc' } }),
-    prisma.plaidConnection.findMany({ where: { userId }, select: { id: true, itemId: true, createdAt: true } }),
+    prisma.plaidConnection.findMany({ where: { userId }, select: { id: true, itemId: true, institutionName: true, createdAt: true } }),
   ]);
 
   return {

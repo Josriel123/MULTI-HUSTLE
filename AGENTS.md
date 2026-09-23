@@ -34,7 +34,9 @@ everything outside its markers alone.
    server and carried in the URL as `?taxYear=` on the client. A route that
    reads year-scoped data without it is a bug. (D13, D18)
 5. **An expense's category is its only tax control.** Do not reintroduce a
-   deductible checkbox; `personal` means not deductible. (D17)
+   deductible checkbox; `personal` means not deductible. Plaid's own labels
+   are stored as facts and may suggest a category (a likely transfer), never
+   set one. (D17, D52)
 6. **Refuse bad input; never correct it silently** — no `.abs()`, no clamping.
    Use `src/lib/validation.ts`. (D20)
 7. **Independent requests load with `Promise.allSettled`.** A failing estimate

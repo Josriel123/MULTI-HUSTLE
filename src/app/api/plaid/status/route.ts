@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { plaidEnv } from '@/lib/plaid';
 
 /**
- * Whether this user has a linked bank.
+ * The banks this user has connected, oldest first (D52), from the database.
  *
  * Replaces the previous approach of trusting `localStorage.plaid_linked_state`,
  * which survived on the device after the connection was gone server-side — the
@@ -15,16 +15,18 @@ export async function GET() {
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const connection = await prisma.plaidConnection.findFirst({
+    const rows = await prisma.plaidConnection.findMany({
       where: { userId },
-      orderBy: { createdAt: 'desc' },
-      select: { createdAt: true, cursor: true },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, institutionName: true, createdAt: true, cursor: true },
     });
+    const connections = rows.map((c) => ({ id: c.id, institutionName: c.institutionName, linkedAt: c.createdAt, hasSynced: Boolean(c.cursor) }));
 
     return NextResponse.json({
-      linked: connection !== null,
-      linkedAt: connection?.createdAt ?? null,
-      hasSynced: Boolean(connection?.cursor),
+      linked: connections.length > 0,
+      linkedAt: connections[0]?.linkedAt ?? null,
+      hasSynced: connections.some((c) => c.hasSynced),
+      connections,
       /** 'sandbox' means Plaid's test bank, which the bank card says. */
       environment: plaidEnv,
     });

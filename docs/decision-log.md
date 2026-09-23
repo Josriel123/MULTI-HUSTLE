@@ -18,7 +18,7 @@ old entry and change nothing else in it.
 | Scope and process | [D1](#d1) · [D9](#d9) · [D12](#d12) · [D27](#d27) · [D36](#d36) · [D47](#d47) · [D50](#d50) |
 | Data and money | [D2](#d2) · [D3](#d3) · [D10](#d10) · [D15](#d15) · [D20](#d20) · [D22](#d22) · [D32](#d32) · [D37](#d37) |
 | Tax engine | [D8](#d8) · [D11](#d11) · [D13](#d13) · [D14](#d14) · [D17](#d17) · [D28](#d28) · [D29](#d29) · [D30](#d30) · [D48](#d48) |
-| Auth, Plaid and security | [D4](#d4) · [D5](#d5) · [D6](#d6) · [D7](#d7) · [D23](#d23) · [D31](#d31) · [D45](#d45) |
+| Auth, Plaid and security | [D4](#d4) · [D5](#d5) · [D6](#d6) · [D7](#d7) · [D23](#d23) · [D31](#d31) · [D45](#d45) · [D52](#d52) |
 | Privacy, consent and policies | [D39](#d39) · [D40](#d40) · [D41](#d41) · [D42](#d42) · [D49](#d49) · [D51](#d51) |
 | UI | [D16](#d16) · [D18](#d18) · [D19](#d19) · [D21](#d21) · [D24](#d24) · [D25](#d25) · [D26](#d26) · [D33](#d33) · [D34](#d34) · [D35](#d35) · [D38](#d38) · [D43](#d43) · [D44](#d44) · [D46](#d46) |
 
@@ -789,4 +789,43 @@ the policies against the code and one of accessibility, ran before this
 release; their findings were fixed or are listed in `PLAN.md`.
 
 **Where.** `src/lib/__tests__/legal-version.test.ts`.
+
+## 2026-09-23 — More than one bank
+
+### <a id="d52"></a>D52 · Several banks per user; transfers between them are flagged, never assumed
+
+**Decision.** A user can connect several banks: "Connect another bank", a
+list of connected banks with a Disconnect each, and one "Sync now" that syncs
+every connection in turn, where a bank that fails is named and does not stop
+the others (its cursor stays put, so nothing is skipped). Each connection
+records its bank from Plaid's `/item/get` (never from the browser), and the
+same bank cannot be connected twice: the second Item is removed at Plaid and
+the person is told to sync the first. Accounts at one bank all come in
+through that bank's one connection, as before.
+
+Each bank row now keeps which account it is in and Plaid's primary category.
+A deposit Plaid labels a transfer, matched by an outflow of exactly the same
+amount (as a decimal) that Plaid also labels a transfer, in a different one
+of the user's accounts within three days, is flagged "Looks like a transfer"
+in the list, with a one-tap "Mark as transfer", and the estimate warns with
+the count and the amount. Plaid's label never sets a category.
+
+**Why.** With money split across accounts, moving it between them looks like
+income, and an uncategorised deposit counts as business income: every
+transfer between the user's own accounts would raise the estimate. Plaid's
+label alone cannot decide it, because gig and freelance payments by Zelle or
+Venmo are often labelled transfers too, and treating real income as a
+transfer would understate the tax; so both legs have to sit in the user's own
+connected accounts, and the person confirms. The same bank twice would
+replay its history as new rows (the problem [D23](#d23) describes for the
+sandbox), counting that income twice.
+
+**Not done.** A bank whose login expires (Plaid's `ITEM_LOGIN_REQUIRED`) is
+reported by name, but re-authorising it through Link's update mode is not
+built; disconnecting and connecting it again brings its history in again, and
+the Disconnect confirmation says so.
+
+**Where.** `src/lib/plaidSync.ts`, `src/lib/transfers.ts`,
+`src/app/api/plaid/`, `src/components/transactions/BankCard.tsx`,
+`TransactionList.tsx`, migration `20260925000000_multiple_banks`.
 

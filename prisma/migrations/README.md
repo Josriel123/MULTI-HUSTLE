@@ -13,6 +13,7 @@ schema before and after, so the SQL is reviewable rather than implied by
 | `20260910000100_form_tax_year` | Phase 3.5: `taxYear` on `Form1098T`, `Form1098E`, `HomeOfficeDeduction` under `@@unique([userId, taxYear])`. |
 | `20260916000000_category_is_source_of_truth` | Data only, no schema change (e2e audit F2). Expense rows with `taxDeductible = false` in a Schedule C category move to `personal`; rows with `taxDeductible = true` and no category get `other_business_expense` (the treatment they already received); then `taxDeductible` is recomputed from the category for every row. Idempotent and null-safe (`COALESCE(category IN (...), false)`). The deductible list must match `DEDUCTIBLE_EXPENSE_CATEGORIES` in `src/lib/tax/categories.ts`; `src/lib/tax/__tests__/migrations.test.ts` runs every migration on PGlite, seeds eleven rows covering each case, and asserts the outcome, the row count, the amount sum, idempotency and the list match. |
 | `20260923000000_w2_payments_profile` | Additive only. `User.spouseItemizes BOOLEAN NOT NULL DEFAULT false`, `User.taxProfileSavedAt TIMESTAMP NULL` (null until the tax profile is saved, so the default filing status is reported as assumed), `Form1098T.restrictedToNonQualifiedExpenses DECIMAL(12,2) NOT NULL DEFAULT 0`, and two tables: `W2Form` (boxes 1, 2, 3, 5, 6, 7 and whose W-2 it is, by tax year) and `EstimatedTaxPayment` (by the tax year paid for). Both reference `User` with `ON DELETE RESTRICT` like every other table, indexed on `(userId, taxYear)`. Identical to what `prisma migrate diff` generates from the live schema; `migrations.test.ts` runs it on PGlite over seeded rows. |
+| `20260925000000_multiple_banks` | Additive only (D47, D52): `PlaidConnection.institutionId` and `institutionName` (the bank, from Plaid's `/item/get`, so the same bank cannot be connected twice and the list can name it), `Transaction.plaidAccountId` and `plaidCategory` (which account a bank row is in and Plaid's primary category, used only to flag likely transfers between the user's accounts). All nullable, nothing back-filled: existing connections learn their bank on their next sync, existing rows keep nulls. `migrations.test.ts` checks the four columns and that existing rows are unchanged. |
 | `20260924000000_consent_record` | Additive only: three nullable columns on `User`, `agreementVersion`, `agreementAcceptedAt` and `adultConfirmedAt` (the clickwrap record and the age check, D40). Nothing is back-filled: existing users are asked once. It deliberately leaves `User.plan` in place (D47): the release serving while it is applied still selects that column. `migrations.test.ts` checks that every existing column survives and that a user can still be created without naming `plan`. |
 
 ## Status
@@ -67,6 +68,19 @@ applied; `User` had `plan` and none of the three new columns. Checked
 afterwards, read-only: every count unchanged, the three columns present,
 nullable and null on all eight users (so each is asked to agree once), `plan`
 untouched, eight migrations applied, none rolled back.
+
+**`20260925000000_multiple_banks` is committed; apply it before this release
+is deployed, and before running the dev server on this code.** It only adds
+columns, so the live release is unaffected; the new code's Prisma client
+selects the new columns, so every transaction and bank query fails without
+them. Measured on main immediately before, read-only (2026-09-23): 8 users,
+128 transactions summing 171,070.25, three bank connections, eight migrations
+applied. After it runs, those should be unchanged and the four new columns
+null everywhere.
+
+```bash
+npx prisma migrate deploy
+```
 
 **Next, after this release is live: drop `User.plan`.** Nothing reads it (it
 held the string "Pro Plan" on every row, for a plan that does not exist), and

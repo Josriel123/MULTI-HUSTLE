@@ -137,7 +137,7 @@ describe('exportUserData', () => {
     const out = await exportUserData('user_me');
     // The query selects only safe columns, so a token could not come back even by mistake.
     const select = m.plaidConnection.findMany.mock.calls[0][0].select;
-    expect(select).toEqual({ id: true, itemId: true, createdAt: true });
+    expect(select).toEqual({ id: true, itemId: true, institutionName: true, createdAt: true });
     expect(JSON.stringify(out)).not.toMatch(/accessToken/);
     expect(out.transactions).toEqual([{ id: 't1', amount: '0.3', date: '2026-03-04T00:00:00.000Z' }]);
   });

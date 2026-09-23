@@ -128,18 +128,32 @@ model Transaction {
   // Unique so re-running a sync updates rather than duplicates — without this,
   // every sync re-inserted the whole page of results.
   plaidTransactionId String? @unique
+  // Which of the user's bank accounts the row is in (Plaid's account_id), and
+  // Plaid's primary category for it (TRANSFER_IN, INCOME, ...). Null for
+  // manual rows and for rows synced before migration 20260925000000. Read
+  // only to suggest "looks like a transfer between your accounts"
+  // (src/lib/transfers.ts, D52); never to decide tax treatment, which stays
+  // the user's category (D17).
+  plaidAccountId     String?
+  plaidCategory      String?
 
   @@index([userId, date])
 }
 
 model PlaidConnection {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  accessToken String
-  itemId      String
-  cursor      String? // Used by Plaid to track sync state
-  createdAt   DateTime @default(now())
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  accessToken     String
+  itemId          String
+  cursor          String? // Used by Plaid to track sync state
+  createdAt       DateTime @default(now())
+  // The bank (Plaid's institution), from /item/get. A user may connect
+  // several banks but not the same one twice: a second Item would bring the
+  // same history in again (D52). Null on rows made before migration
+  // 20260925000000 until their next sync fills it.
+  institutionId   String?
+  institutionName String?
 }
 
 model Form1098T {

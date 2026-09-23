@@ -211,7 +211,7 @@ describe('PATCH /api/transactions/[id] and hustles', () => {
 
 describe('Plaid sync and hustles', () => {
   function arrange(txn: Record<string, unknown>, claimed: boolean) {
-    vi.mocked(prisma.plaidConnection.findFirst).mockResolvedValue({ id: 'c', accessToken: 'a', cursor: null } as never);
+    vi.mocked(prisma.plaidConnection.findMany).mockResolvedValue([{ id: 'c', accessToken: 'a', cursor: null, institutionId: 'ins_1', institutionName: 'Bank' }] as never);
     vi.mocked(plaidClient.transactionsSync).mockResolvedValue({ data: { added: [txn], modified: [], removed: [], has_more: false, next_cursor: 'n' } } as never);
     vi.mocked(prisma.incomeSource.findMany).mockResolvedValue([{ id: 'uber', name: 'Uber' }] as never);
     vi.mocked(prisma.transaction.findUnique).mockResolvedValue(claimed ? ({ id: 'row' } as never) : null);

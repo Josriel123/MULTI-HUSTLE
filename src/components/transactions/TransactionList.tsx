@@ -204,6 +204,20 @@ export function TransactionList({
                                 <Landmark size={11} aria-hidden /> From your bank
                               </Badge>
                             )}
+                            {tx.possibleTransfer && !tx.category && (
+                              // The same amount left another of your accounts: probably a move, not income (D52).
+                              <>
+                                <Badge tone="warning">Looks like a transfer</Badge>
+                                <button
+                                  type="button"
+                                  disabled={savingId === tx.id}
+                                  onClick={() => void setCategory(tx, 'transfer')}
+                                  className="rounded-md px-1.5 py-0.5 text-xs font-medium text-accent underline underline-offset-2 hover:no-underline disabled:opacity-60"
+                                >
+                                  Mark as transfer<span className="sr-only">: {tx.description || 'this deposit'}</span>
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
