@@ -1,14 +1,25 @@
 import { estimateFederalTax, type FederalTaxEstimate } from '../engine';
-import type { Money } from '../money';
+import { notBelowZero, type Money } from '../money';
 import { buildFederalTaxInput, type BuildInputArgs, type BuiltInput } from './prismaRows';
 
 export interface RowsEstimate {
   built: BuiltInput;
   estimate: FederalTaxEstimate;
   /**
-   * The dashboard's "safe to spend": deposits counted as income, less every
-   * expense (deductible or not), less the estimated federal tax. A cash view,
-   * not a tax figure.
+   * The dashboard's "safe to spend": what is left of the hustle money after
+   * every expense and after putting aside the federal tax still to pay. A
+   * cash view, not a tax figure:
+   *
+   *     deposits counted as income
+   *   - every expense, deductible or not
+   *   - estimated payments already sent (that money has left)
+   *   - the balance still due (Form 1040 line 37), never a refund
+   *
+   * With no W-2 and no payments this is income - expenses - total tax, as it
+   * always was. Making a payment does not change it: cash and the balance
+   * due fall by the same amount. Tax withheld from a W-2 paycheck came out of
+   * wages that never reached these deposits, so it is not charged again. An
+   * expected refund is not counted until it arrives.
    */
   safeToSpend: Money;
 }
@@ -23,7 +34,10 @@ export interface RowsEstimate {
 export function estimateFromRows(args: BuildInputArgs): RowsEstimate {
   const built = buildFederalTaxInput(args);
   const estimate = estimateFederalTax(built.input);
-  const safeToSpend = built.cashIncomeTotal.minus(built.cashExpensesTotal).minus(estimate.totalTax);
+  const safeToSpend = built.cashIncomeTotal
+    .minus(built.cashExpensesTotal)
+    .minus(estimate.payments.estimatedPayments)
+    .minus(notBelowZero(estimate.balanceDue));
 
   // The per-source display buckets count car_and_truck amounts as entered.
   // When the engine applied the standard mileage rate instead (one method per

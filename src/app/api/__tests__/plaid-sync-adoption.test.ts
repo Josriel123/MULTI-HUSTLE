@@ -14,7 +14,7 @@ vi.mock('@/lib/plaid', () => ({
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     plaidConnection: { findFirst: vi.fn(), update: vi.fn() },
-    incomeSource: { findFirst: vi.fn(), create: vi.fn() },
+    incomeSource: { findFirst: vi.fn(), findMany: vi.fn().mockResolvedValue([]), create: vi.fn() },
     transaction: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
   },
 }));

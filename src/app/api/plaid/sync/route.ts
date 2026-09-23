@@ -5,6 +5,7 @@ import { plaidClient, describePlaidError } from '@/lib/plaid';
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/user';
 import { decryptSecret, encryptSecret, isEncrypted } from '@/lib/crypto';
+import { matchHustle } from '@/lib/hustles';
 
 export async function POST() {
   const userId = await requireUser();
@@ -53,25 +54,15 @@ export async function POST() {
       cursor = data.next_cursor;
     }
 
-    // Cache income sources so we don't re-query per transaction.
-    const sourceCache = new Map<string, string>();
-    // `owner` is passed rather than closed over: TypeScript drops the
-    // non-null narrowing of `userId` inside a nested function body.
-    async function resolveSourceId(owner: string, name: string): Promise<string> {
-      const cached = sourceCache.get(name);
-      if (cached) return cached;
-
-      let source = await prisma.incomeSource.findFirst({
-        where: { userId: owner, name },
-        select: { id: true },
-      });
-      source ??= await prisma.incomeSource.create({
-        data: { userId: owner, name, type: 'Delivery' },
-        select: { id: true },
-      });
-      sourceCache.set(name, source.id);
-      return source.id;
-    }
+    // A new deposit joins a hustle only when its description names one the
+    // user created ("Uber" matches "Uber 072515 SF**POOL**"); otherwise it
+    // stays unassigned for the user to choose. This used to create a hustle
+    // per distinct description, so the list filled with bank strings, and it
+    // re-set the hustle on every sync, undoing the user's choice.
+    const hustles = await prisma.incomeSource.findMany({
+      where: { userId },
+      select: { id: true, name: true },
+    });
 
     let upserted = 0;
     /** Pre-plaidTransactionId rows reclaimed rather than duplicated. */
@@ -80,9 +71,6 @@ export async function POST() {
     for (const txn of [...added, ...modified]) {
       // Plaid sign convention: negative amount means money INTO the account.
       const isIncome = txn.amount < 0;
-      const sourceId = isIncome
-        ? await resolveSourceId(userId, txn.name || 'Unknown Bank Deposit')
-        : undefined;
 
       const fields = {
         userId,
@@ -98,7 +86,6 @@ export async function POST() {
         type: isIncome ? 'Income' : 'Expense',
         date: new Date(txn.date),
         description: txn.name || 'Bank Transaction',
-        incomeSourceId: sourceId,
       };
 
       // Keyed on Plaid's transaction_id, so a repeated sync updates in place.
@@ -152,6 +139,8 @@ export async function POST() {
         data: {
           ...fields,
           plaidTransactionId: txn.transaction_id,
+          // Only on create: after that the hustle is the user's to change.
+          incomeSourceId: isIncome ? matchHustle(txn.name, hustles)?.id : undefined,
           // Defaults to false. The previous heuristic marked anything in
           // "Food and Drink" or "Shops" as tax-deductible, which flags
           // groceries as a business expense and understates tax owed.

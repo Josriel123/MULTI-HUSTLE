@@ -47,14 +47,21 @@ export async function POST(req: NextRequest) {
         const id = evt.data.id;
         if (!id) break;
         // Children are deleted explicitly: the schema has no cascade rules, so
-        // deleting the User alone would fail on its foreign keys.
+        // deleting the User alone would fail on its foreign keys. Order
+        // matters: transactions and trips point at income sources, so they go
+        // first. src/app/api/__tests__/clerk-webhook-delete.test.ts fails if a
+        // table with a userId is added to the schema but not here (MileageLog
+        // was missing, which made every account deletion fail).
         await prisma.$transaction([
           prisma.transaction.deleteMany({ where: { userId: id } }),
+          prisma.mileageLog.deleteMany({ where: { userId: id } }),
           prisma.incomeSource.deleteMany({ where: { userId: id } }),
           prisma.plaidConnection.deleteMany({ where: { userId: id } }),
           prisma.form1098T.deleteMany({ where: { userId: id } }),
           prisma.form1098E.deleteMany({ where: { userId: id } }),
           prisma.homeOfficeDeduction.deleteMany({ where: { userId: id } }),
+          prisma.w2Form.deleteMany({ where: { userId: id } }),
+          prisma.estimatedTaxPayment.deleteMany({ where: { userId: id } }),
           prisma.user.deleteMany({ where: { id } }),
         ]);
         break;

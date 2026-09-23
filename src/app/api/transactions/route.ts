@@ -5,6 +5,8 @@ import { requireUser } from '@/lib/user';
 import { isDeductibleExpenseCategory, isExpenseCategory, isIncomeCategory } from '@/lib/tax';
 import { resolveTaxYear } from '@/lib/taxYear';
 import { parseMoneyInput } from '@/lib/validation';
+import { isHustleKind, parseHustleName } from '@/lib/hustles';
+import { findOrCreateHustle, ownedHustle } from '@/lib/hustleStore';
 
 /**
  * Money-over-the-wire contract:
@@ -39,7 +41,7 @@ export async function POST(req: Request) {
 
   try {
     const data = await req.json();
-    const { amount, type, description, sourceName, category, date } = data;
+    const { amount, type, description, sourceName, sourceType, incomeSourceId, category, date } = data;
 
     // Rejects rather than corrects: negative, non-numeric, or beyond what
     // DECIMAL(12,2) holds. The out-of-range case previously reached Prisma and
@@ -69,17 +71,21 @@ export async function POST(req: Request) {
       cleanCategory = category;
     }
 
-    // Find or create the associated income source (e.g. "Freelance Dev Income")
+    // The hustle: an existing one by id, or one by name (found ignoring
+    // case, else created with `sourceType`). Optional; a hustle only groups.
     let incomeSource = null;
-    if (sourceName) {
-      incomeSource = await prisma.incomeSource.findFirst({
-        where: { name: sourceName, userId: userId }
-      });
+    if (incomeSourceId) {
+      incomeSource = await ownedHustle(userId, String(incomeSourceId));
       if (!incomeSource) {
-        incomeSource = await prisma.incomeSource.create({
-          data: { name: sourceName, type: 'Other', userId: userId }
-        });
+        return NextResponse.json({ error: 'That hustle does not exist on this account.' }, { status: 400 });
       }
+    } else if (sourceName !== undefined && sourceName !== null && sourceName !== '') {
+      const parsedName = parseHustleName(sourceName);
+      if (!parsedName.ok) return NextResponse.json({ error: parsedName.error }, { status: 400 });
+      if (sourceType !== undefined && !isHustleKind(sourceType)) {
+        return NextResponse.json({ error: 'Hustle type must be Delivery, Freelance or Other.' }, { status: 400 });
+      }
+      incomeSource = await findOrCreateHustle(userId, parsedName.name, isHustleKind(sourceType) ? sourceType : 'Other');
     }
 
     const txDate = date ? new Date(date) : new Date();

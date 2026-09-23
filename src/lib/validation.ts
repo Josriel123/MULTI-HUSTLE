@@ -62,6 +62,36 @@ export function parseMoneyInput(value: unknown, field: string): ParsedMoney {
   return { ok: true, value: decimal };
 }
 
+/**
+ * Same rules for a box that may be left blank, such as W-2 box 7 when there
+ * were no tips: blank means zero. Anything typed is parsed exactly as above.
+ */
+export function parseOptionalMoneyInput(value: unknown, field: string): ParsedMoney {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return { ok: true, value: new Prisma.Decimal(0) };
+  }
+  return parseMoneyInput(value, field);
+}
+
+export type ParsedDate = { ok: true; value: Date } | { ok: false; error: string };
+
+/**
+ * A calendar date as YYYY-MM-DD, stored at UTC midnight like every other date
+ * here. `new Date('2025-02-30')` quietly becomes March 2, so the parts are
+ * checked after parsing.
+ */
+export function parseDateInput(value: unknown, field: string): ParsedDate {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    return { ok: false, error: `${field} must be a date (YYYY-MM-DD).` };
+  }
+  const iso = value.trim();
+  const date = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== iso) {
+    return { ok: false, error: `${field} is not a real date.` };
+  }
+  return { ok: true, value: date };
+}
+
 export type ParsedHomeOffice =
   | { ok: true; values: { totalSqFt: Prisma.Decimal; officeSqFt: Prisma.Decimal; rentAmount: Prisma.Decimal; utilitiesAmount: Prisma.Decimal } }
   | { ok: false; error: string };

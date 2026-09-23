@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@clerk/nextjs/server';
 import { requireUser } from '@/lib/user';
 import { resolveTaxYear, resolveTaxYearFromRequest } from '@/lib/taxYear';
+import { parseMoneyInput } from '@/lib/validation';
 
 /**
  * Form 1098-E, scoped to a tax year.
@@ -26,11 +27,11 @@ export async function POST(request: NextRequest) {
     if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 400 });
     const { taxYear } = resolved;
 
-    const parsedBox1 = parseFloat(body.box1);
-    if (Number.isNaN(parsedBox1)) {
-      return NextResponse.json({ error: 'Invalid numbers provided' }, { status: 400 });
-    }
-    const box1 = Math.max(0, parsedBox1);
+    // Refused, not corrected: this clamped a negative to 0 and parseFloat
+    // read "1,200" as 1.
+    const parsedBox1 = parseMoneyInput(body.box1, 'Box 1 (student loan interest)');
+    if (!parsedBox1.ok) return NextResponse.json({ error: parsedBox1.error }, { status: 400 });
+    const box1 = parsedBox1.value;
 
     const form = await prisma.form1098E.upsert({
       where: { userId_taxYear: { userId, taxYear } },

@@ -8,9 +8,11 @@ import {
   type ExpenseCategory,
   type IncomeCategory,
 } from '../categories';
-import type { FederalTaxInput } from '../engine';
+import type { FederalTaxInput, W2Input } from '../engine';
 import { money, nonNegativeMoney, ZERO, type Money, type MoneyInput } from '../money';
+import { getTaxYearParameters, isSupportedTaxYear } from '../parameters';
 import type { ExpenseItem, MileageTrip } from '../scheduleC';
+import { SE_RATES } from '../scheduleSE';
 import { isFilingStatus, type FilingStatus, type Warning } from '../types';
 
 /**
@@ -36,6 +38,12 @@ import { isFilingStatus, type FilingStatus, type Warning } from '../types';
  *    the rate in force on each trip's date (e2e audit 2026-09-16, F1).
  *  - Filing status and dependent status come from the User row, defaulting to
  *    single / not a dependent, and the defaults are reported as assumptions.
+ *  - Several W-2s become one engine W-2 (see mergeW2Forms): per-return boxes
+ *    are summed across the return, Social Security boxes only across the
+ *    self-employed person's own W-2s. A spouse's W-2 counts only on a joint
+ *    return. Paycheck deposits are never wages.
+ *  - Estimated tax payments count by the tax year they were made for, not the
+ *    date paid (the fourth quarter's is due the following January).
  */
 
 export interface TransactionRow {
@@ -57,15 +65,47 @@ export interface MileageLogRow {
 export interface UserTaxProfileRow {
   filingStatus?: string | null;
   claimedAsDependent?: boolean | null;
-  /** Married filing separately: the spouse itemizes (IRC §63(c)(6)(A)). Not yet a database column; passes through when present. */
+  /** Married filing separately: the spouse itemizes (IRC §63(c)(6)(A)). */
   spouseItemizes?: boolean | null;
+  /**
+   * When the user last saved their tax profile. Null means never, so the
+   * stored filing status is the column default rather than a choice and is
+   * reported as assumed. Left out (a caller that does not load it) means the
+   * stored status is taken as chosen.
+   */
+  taxProfileSavedAt?: Date | null;
 }
 
 export interface Form1098TRow {
   box1: MoneyInput;
   box5: MoneyInput;
-  /** Part of Box 5 earmarked by the grant for room and board or other non-qualified expenses. Not yet a database column; passes through when present. */
+  /** Part of Box 5 earmarked by the grant for room and board or other non-qualified expenses: always taxable. */
   restrictedToNonQualifiedExpenses?: MoneyInput | null;
+}
+
+/** A `W2Form` row. Field names are the database's; the box numbers are the form's. */
+export interface W2FormRow {
+  taxYear: number;
+  /** Box 1. */
+  wages: MoneyInput;
+  /** Box 2. */
+  federalWithheld?: MoneyInput | null;
+  /** Box 3. */
+  socialSecurityWages: MoneyInput;
+  /** Box 7. */
+  socialSecurityTips?: MoneyInput | null;
+  /** Box 5. */
+  medicareWages: MoneyInput;
+  /** Box 6. */
+  medicareWithheld?: MoneyInput | null;
+  /** False only for a spouse's W-2 on a joint return. Null or missing means the taxpayer's own. */
+  ownedByTaxpayer?: boolean | null;
+}
+
+/** An `EstimatedTaxPayment` row. */
+export interface EstimatedPaymentRow {
+  taxYear: number;
+  amount: MoneyInput;
 }
 
 export interface Form1098ERow {
@@ -90,6 +130,10 @@ export interface BuildInputArgs {
   form1098T?: Form1098TRow | null;
   form1098E?: Form1098ERow | null;
   homeOffice?: HomeOfficeRow | null;
+  /** Every W-2 on file for the year, the spouse's included on a joint return. */
+  w2Forms?: readonly W2FormRow[] | null;
+  /** Form 1040-ES payments made for the year. */
+  estimatedPayments?: readonly EstimatedPaymentRow[] | null;
 }
 
 export interface SourceBucket {
@@ -107,6 +151,17 @@ export interface SourceBucket {
   vehicleExpenses: Money;
 }
 
+/** Income counted on the return, for one hustle. */
+export interface HustleIncome {
+  /** The IncomeSource name, or null for income with no hustle chosen. */
+  name: string | null;
+  /** The IncomeSource type ("Freelance", "Delivery", "Other"), or null. */
+  type: string | null;
+  income: Money;
+  /** Deposits counted. */
+  count: number;
+}
+
 export interface ExcludedIncome {
   category: IncomeCategory;
   count: number;
@@ -122,7 +177,17 @@ export interface BuiltInput {
   outsideTaxYear: number;
   /** Mileage logs dated in / outside the tax year. */
   mileage: { included: number; outsideTaxYear: number };
+  /**
+   * W-2s: `included` on the return (the spouse's among them on a joint
+   * return), of which `spouse`; `excludedSpouse` were a spouse's on a return
+   * that is not joint; `outsideTaxYear` belonged to another year.
+   */
+  w2: { included: number; spouse: number; excludedSpouse: number; outsideTaxYear: number };
+  /** Estimated payments counted for the year. */
+  estimatedPayments: { count: number; total: Money };
   bySource: { freelance: SourceBucket; delivery: SourceBucket; other: SourceBucket };
+  /** Income counted on the return, per hustle (IncomeSource), largest first. Display only. */
+  incomeByHustle: HustleIncome[];
   /** Every in-year Expense transaction, deductible or not. Used for the "safe to spend" figure. */
   cashExpensesTotal: Money;
   /** Every in-year deposit that was counted as income. */
@@ -135,6 +200,59 @@ export interface BuiltInput {
 
 function emptyBucket(): SourceBucket {
   return { income: ZERO, deductibleExpenses: ZERO, vehicleExpenses: ZERO };
+}
+
+/** Sum of optional amounts; missing and null are zero. */
+function sumOf(rows: readonly W2FormRow[], pick: (row: W2FormRow) => MoneyInput | null | undefined, field: string): Money {
+  return rows.reduce<Money>((total, row, index) => {
+    const value = pick(row);
+    return value === null || value === undefined ? total : total.plus(nonNegativeMoney(value, `w2Forms[${index}].${field}`));
+  }, ZERO);
+}
+
+/**
+ * Several W-2s become the engine's single `W2Input`.
+ *
+ * Boxes 1, 2, 5 and 6 are per return. Form 1040 lines 1a and 25a add every
+ * W-2, and Form 8959 (Additional Medicare Tax) says "If you have more than one
+ * Form W-2, enter the total" for box 5 on line 1 and box 6 on line 19, both
+ * spouses' on a joint return.
+ *
+ * Boxes 3 and 7 are per person. Schedule SE line 8a is the self-employed
+ * individual's own Social Security wages and tips, so only `own` W-2s count
+ * there, and the merged input is marked as the taxpayer's because it already
+ * is.
+ */
+function mergeW2Forms(all: readonly W2FormRow[], own: readonly W2FormRow[]): W2Input {
+  return {
+    wages: sumOf(all, (r) => r.wages, 'wages'),
+    federalIncomeTaxWithheld: sumOf(all, (r) => r.federalWithheld, 'federalWithheld'),
+    medicareWages: sumOf(all, (r) => r.medicareWages, 'medicareWages'),
+    medicareTaxWithheld: sumOf(all, (r) => r.medicareWithheld, 'medicareWithheld'),
+    socialSecurityWages: sumOf(own, (r) => r.socialSecurityWages, 'socialSecurityWages'),
+    socialSecurityTips: sumOf(own, (r) => r.socialSecurityTips, 'socialSecurityTips'),
+    ownedByTaxpayer: true,
+  };
+}
+
+/**
+ * Each employer withholds 6.2% Social Security tax on wages up to the wage
+ * base, so two employers together can withhold on more than the base. The
+ * excess comes back as a credit (Form 1040 Schedule 3 line 11), which the
+ * engine does not compute, so the estimate overstates what is owed. Per
+ * person: spouses' wages are never combined for this.
+ */
+function excessSocialSecurityWarning(rows: readonly W2FormRow[], taxYear: number, whose: 'your' | "your spouse's"): Warning | null {
+  if (rows.length < 2 || !isSupportedTaxYear(taxYear)) return null;
+  const base = money(getTaxYearParameters(taxYear).selfEmployment.socialSecurityWageBase);
+  const ssWages = sumOf(rows, (r) => r.socialSecurityWages, 'socialSecurityWages').plus(sumOf(rows, (r) => r.socialSecurityTips, 'socialSecurityTips'));
+  if (!ssWages.greaterThan(base)) return null;
+  const excess = ssWages.minus(base).times(SE_RATES.socialSecurityEmployee).toDecimalPlaces(2);
+  return {
+    code: 'excess_social_security_withheld',
+    message: `Across ${rows.length} of ${whose} W-2s, Social Security tax was withheld on $${ssWages.toFixed(2)} of wages, more than the $${base.toFixed(0)} wage base for ${taxYear}. The excess withholding, about $${excess.toFixed(2)}, is refunded as a credit on Schedule 3 line 11, which this estimate does not include, so it overstates what you owe. Box 4 of each W-2 gives the exact figure.`,
+    amount: excess.toFixed(2),
+  };
 }
 
 /** Display grouping only. Uses the IncomeSource `type` column, never the name. */
@@ -152,7 +270,7 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
   // Filing status.
   let filingStatus: FilingStatus = 'single';
   let filingStatusSource: BuiltInput['filingStatusSource'] = 'default';
-  const stored = args.user?.filingStatus;
+  const stored = args.user?.taxProfileSavedAt === null ? null : args.user?.filingStatus;
   if (isFilingStatus(stored)) {
     filingStatus = stored;
     filingStatusSource = 'profile';
@@ -166,6 +284,14 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
   const spouseItemizes = args.user?.spouseItemizes ?? false;
 
   const bySource = { freelance: emptyBucket(), delivery: emptyBucket(), other: emptyBucket() };
+  const byHustle = new Map<string, HustleIncome>();
+  const addHustleIncome = (source: TransactionRow['incomeSource'], amount: Money) => {
+    const key = source ? `${source.type}\u0000${source.name}` : '';
+    const entry = byHustle.get(key) ?? { name: source?.name ?? null, type: source?.type ?? null, income: ZERO, count: 0 };
+    entry.income = entry.income.plus(amount);
+    entry.count++;
+    byHustle.set(key, entry);
+  };
   const excluded = new Map<IncomeCategory, ExcludedIncome>();
   /** Distinct income sources that produced business receipts; more than one with a home office triggers the per-business-limit warning. */
   const businessSources = new Set<string>();
@@ -215,12 +341,14 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
           grossReceipts = grossReceipts.plus(amount);
           cashIncome = cashIncome.plus(amount);
           bucket.income = bucket.income.plus(amount);
+          addHustleIncome(row.incomeSource, amount);
           businessSources.add(row.incomeSource ? `${row.incomeSource.type}:${row.incomeSource.name}` : '(no source)');
           break;
         case 'other_income':
           otherIncome = otherIncome.plus(amount);
           cashIncome = cashIncome.plus(amount);
           bucket.income = bucket.income.plus(amount);
+          addHustleIncome(row.incomeSource, amount);
           break;
         case 'excluded':
         case 'excluded_not_modeled': {
@@ -275,6 +403,44 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
     mileage.push({ date: log.date.toISOString().slice(0, 10), miles: log.miles });
   }
 
+  // W-2s. A spouse's W-2 belongs only on a joint return; on any other status
+  // it is not part of this return at all.
+  const jointReturn = filingStatus === 'married_filing_jointly';
+  const inYearW2s: W2FormRow[] = [];
+  let w2OutsideTaxYear = 0;
+  for (const row of args.w2Forms ?? []) {
+    if (row.taxYear !== args.taxYear) {
+      w2OutsideTaxYear++;
+      continue;
+    }
+    inYearW2s.push(row);
+  }
+  const ownW2s = inYearW2s.filter((row) => row.ownedByTaxpayer !== false);
+  const spouseW2s = inYearW2s.filter((row) => row.ownedByTaxpayer === false);
+  const returnW2s = jointReturn ? inYearW2s : ownW2s;
+  if (!jointReturn && spouseW2s.length > 0) {
+    warnings.push({
+      code: 'spouse_w2_not_on_this_return',
+      message: `${spouseW2s.length} W-2(s) marked as your spouse's were left out: a spouse's wages are only on your return when you file jointly. Change your filing status, or mark the W-2 as yours if it is.`,
+      amount: sumOf(spouseW2s, (r) => r.wages, 'wages').toFixed(2),
+    });
+  }
+  for (const warning of [
+    excessSocialSecurityWarning(ownW2s, args.taxYear, 'your'),
+    jointReturn ? excessSocialSecurityWarning(spouseW2s, args.taxYear, "your spouse's") : null,
+  ]) {
+    if (warning) warnings.push(warning);
+  }
+
+  // Estimated payments, by the year they were made for.
+  let estimatedPaymentsTotal: Money = ZERO;
+  let estimatedPaymentsCount = 0;
+  for (const [index, row] of (args.estimatedPayments ?? []).entries()) {
+    if (row.taxYear !== args.taxYear) continue;
+    estimatedPaymentsTotal = estimatedPaymentsTotal.plus(nonNegativeMoney(row.amount, `estimatedPayments[${index}].amount`));
+    estimatedPaymentsCount++;
+  }
+
   if (uncategorisedIncomeCount > 0) {
     warnings.push({
       code: 'uncategorised_income',
@@ -291,6 +457,20 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
   }
   for (const entry of excluded.values()) {
     const def = INCOME_CATEGORIES[entry.category];
+    if (entry.category === 'w2_paycheck' && returnW2s.length > 0) {
+      // Expected and correct once the W-2 is on file: the deposits are left
+      // out because the W-2's boxes already carry those wages.
+      assumptions.push(`${entry.count} paycheck deposit(s) were left out of income on purpose; wages come from the ${returnW2s.length} W-2(s) entered.`);
+      continue;
+    }
+    if (entry.category === 'w2_paycheck') {
+      warnings.push({
+        code: 'paychecks_without_w2',
+        message: `${entry.count} deposit(s) are paychecks, but no W-2 is entered for ${args.taxYear}, so those wages and the tax already withheld from them are missing from the estimate. Add the W-2, or your latest pay stub's year-to-date figures.`,
+        amount: entry.total.toFixed(2),
+      });
+      continue;
+    }
     if (def.treatment === 'excluded_not_modeled') {
       warnings.push({
         code: `excluded_not_modeled_${entry.category}`,
@@ -344,6 +524,8 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
       : null,
     studentLoanInterestPaid: args.form1098E ? args.form1098E.box1 : undefined,
     spouseItemizes,
+    w2: returnW2s.length > 0 ? mergeW2Forms(returnW2s, ownW2s) : null,
+    estimatedTaxPaymentsMade: estimatedPaymentsCount > 0 ? estimatedPaymentsTotal : undefined,
   };
 
   if (args.homeOffice) {
@@ -356,7 +538,15 @@ export function buildFederalTaxInput(args: BuildInputArgs): BuiltInput {
     included,
     outsideTaxYear,
     mileage: { included: mileage.length, outsideTaxYear: mileageOutsideTaxYear },
+    w2: {
+      included: returnW2s.length,
+      spouse: jointReturn ? spouseW2s.length : 0,
+      excludedSpouse: jointReturn ? 0 : spouseW2s.length,
+      outsideTaxYear: w2OutsideTaxYear,
+    },
+    estimatedPayments: { count: estimatedPaymentsCount, total: estimatedPaymentsTotal },
     bySource,
+    incomeByHustle: [...byHustle.values()].sort((a, b) => b.income.comparedTo(a.income) || (a.name ?? '').localeCompare(b.name ?? '')),
     cashExpensesTotal: cashExpenses,
     cashIncomeTotal: cashIncome,
     excludedIncome: [...excluded.values()],

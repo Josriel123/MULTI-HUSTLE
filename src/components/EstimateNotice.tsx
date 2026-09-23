@@ -7,11 +7,11 @@ export interface EstimateNoticeProps {
   /** `disclaimer` from the summary response. */
   disclaimer: string | null | undefined;
   /** `warnings` from the summary response. Render all of them; never filter. */
-  warnings: TaxWarning[] | null | undefined;
+  warnings: readonly TaxWarning[] | null | undefined;
   /** `assumptions` from the summary response, shown collapsed. */
-  assumptions?: string[] | null;
+  assumptions?: readonly string[] | null;
   /** `notModeled` from the summary response, shown collapsed. */
-  notModeled?: string[] | null;
+  notModeled?: readonly string[] | null;
   className?: string;
 }
 
@@ -89,7 +89,7 @@ export function EstimateNotice({ disclaimer, warnings, assumptions, notModeled, 
  * in print, and a plain copy that exists only in print. `hidden` keeps the
  * copy out of the accessibility tree on screen, so it is not read twice.
  */
-function CollapsibleList({ title, items }: { title: string; items: string[] }) {
+function CollapsibleList({ title, items }: { title: string; items: readonly string[] }) {
   return (
     <>
       <details className="mt-4 border-t border-border pt-3 text-sm text-fg-muted print:hidden">

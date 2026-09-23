@@ -41,7 +41,7 @@ export default function Dashboard() {
       .then(([summary, points]) => {
         if (ignore) return;
         setData(summary);
-        setChart(points);
+        setChart(points.points);
         setError(null);
       })
       .catch((err: unknown) => {

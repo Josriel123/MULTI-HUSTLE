@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { isDeductibleExpenseCategory, isExpenseCategory, isIncomeCategory } from '@/lib/tax';
 import { parseMoneyInput } from '@/lib/validation';
+import { isHustleKind, parseHustleName } from '@/lib/hustles';
+import { findOrCreateHustle } from '@/lib/hustleStore';
 
 /**
  * PATCH /api/transactions/[id]
@@ -16,8 +18,13 @@ import { parseMoneyInput } from '@/lib/validation';
  * Plaid constraint:
  * Transactions synchronized via Plaid (`plaidTransactionId != null`) are immutable
  * with respect to `amount` and `date`, because subsequent sync runs overwrite them.
- * Callers may update `category`. If `amount` or `date` alterations are attempted
- * on a Plaid transaction, the route returns 400 with an explicit error.
+ * Callers may update `category` and the hustle. If `amount` or `date`
+ * alterations are attempted on a Plaid transaction, the route returns 400 with
+ * an explicit error.
+ *
+ * Hustle: `incomeSourceId` (an existing hustle, or null to unassign) or
+ * `sourceName` with an optional `sourceType` (found ignoring case, else
+ * created). Allowed on Plaid rows too: the sync never overwrites it.
  *
  * Tax treatment (e2e audit 2026-09-16, F2):
  * `category` alone decides it. `taxDeductible` is derived from the category
@@ -48,7 +55,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { amount, date, description, category, incomeSourceId } = body;
+    const { amount, date, description, category, incomeSourceId, sourceName, sourceType } = body;
 
     const isPlaid = Boolean(existing.plaidTransactionId);
 
@@ -104,18 +111,27 @@ export async function PATCH(
       if (description !== undefined) {
         dataToUpdate.description = description ? String(description).trim() : '';
       }
-      if (incomeSourceId !== undefined) {
-        if (incomeSourceId) {
-          const source = await prisma.incomeSource.findFirst({
-            where: { id: incomeSourceId, userId },
-          });
-          if (!source) {
-            return NextResponse.json({ error: 'Specified income source does not belong to user.' }, { status: 400 });
-          }
-          dataToUpdate.incomeSource = { connect: { id: incomeSourceId } };
-        } else {
-          dataToUpdate.incomeSource = { disconnect: true };
+    }
+
+    if (sourceName !== undefined && sourceName !== null && sourceName !== '') {
+      const parsedName = parseHustleName(sourceName);
+      if (!parsedName.ok) return NextResponse.json({ error: parsedName.error }, { status: 400 });
+      if (sourceType !== undefined && !isHustleKind(sourceType)) {
+        return NextResponse.json({ error: 'Hustle type must be Delivery, Freelance or Other.' }, { status: 400 });
+      }
+      const source = await findOrCreateHustle(userId, parsedName.name, isHustleKind(sourceType) ? sourceType : 'Other');
+      dataToUpdate.incomeSource = { connect: { id: source.id } };
+    } else if (incomeSourceId !== undefined) {
+      if (incomeSourceId) {
+        const source = await prisma.incomeSource.findFirst({
+          where: { id: incomeSourceId, userId },
+        });
+        if (!source) {
+          return NextResponse.json({ error: 'Specified income source does not belong to user.' }, { status: 400 });
         }
+        dataToUpdate.incomeSource = { connect: { id: incomeSourceId } };
+      } else {
+        dataToUpdate.incomeSource = { disconnect: true };
       }
     }
 

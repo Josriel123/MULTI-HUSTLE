@@ -38,6 +38,8 @@ export const SE_RATES = {
   halfDeduction: '0.5', // §164(f)(1)
   /** Employee share of Medicare tax withheld from wages (§3101(b)(1)); Form 8959 line 21 multiplies Medicare wages by it. */
   medicareEmployee: '0.0145',
+  /** Employee share of Social Security tax withheld from wages (§3101(a)), up to the wage base per employer. */
+  socialSecurityEmployee: '0.062',
 } as const;
 
 /** §1402(b)(2): no self-employment income (and no tax) when net earnings are under $400. */

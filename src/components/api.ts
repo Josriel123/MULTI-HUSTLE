@@ -1,3 +1,4 @@
+import type { ChartPayload, SummaryPayload } from '@/lib/dashboard';
 import type { FederalTaxEstimate, Serialized, Warning } from '@/lib/tax';
 
 /**
@@ -12,48 +13,14 @@ import type { FederalTaxEstimate, Serialized, Warning } from '@/lib/tax';
 export type EstimatePayload = Serialized<FederalTaxEstimate>;
 export type TaxWarning = Warning;
 
-export interface SourceBucketPayload {
-  income: number;
-  deductions: number;
-}
-
-export interface SummaryResponse {
-  taxYear: number;
-  filingStatus: string;
-  filingStatusSource: 'profile' | 'default';
-  /** Must be rendered wherever a figure from this response is shown. */
-  disclaimer: string;
-  summary: {
-    /** Form 1040 line 9. */
-    gross: number;
-    /** Deposits counted as income, less every expense, less the estimated tax. */
-    net: number;
-    /** Form 1040 line 24, before credits. */
-    taxLiability: number;
-  };
-  sources: {
-    freelance: SourceBucketPayload & { homeOfficeDeduction: number };
-    delivery: SourceBucketPayload & { mileage: number; mileageDeduction: number };
-    other: SourceBucketPayload;
-    scholarships: { taxable: number; textbookSavings: number; loanInterestDeduction: number };
-  };
-  transactions: {
-    included: number;
-    excludedIncome: Array<{ category: string; count: number; total: number }>;
-    uncategorised: { incomeCount: number; incomeTotal: number; expenseCount: number };
-  };
-  estimate: EstimatePayload;
-  /** Must be rendered alongside `disclaimer`. */
-  warnings: TaxWarning[];
-  assumptions: string[];
-  notModeled: string[];
-}
-
-export interface ChartPoint {
-  month: string;
-  gross: number;
-  net: number;
-}
+/**
+ * The summary and chart responses are the server's own return types
+ * (src/lib/dashboard.ts), so the two sides cannot drift. `disclaimer`,
+ * `warnings`, `assumptions` and `notModeled` must be shown with any figure.
+ */
+export type SummaryResponse = SummaryPayload;
+export type ChartResponse = ChartPayload;
+export type ChartPoint = ChartPayload['points'][number];
 
 export class ApiError extends Error {
   constructor(
@@ -84,9 +51,8 @@ export async function fetchSummary(taxYear?: number): Promise<SummaryResponse> {
 }
 
 /** GET /api/dashboard/chart. */
-export async function fetchChart(taxYear?: number): Promise<ChartPoint[]> {
-  const points = await readJson<ChartPoint[]>(await fetch(withYear('/api/dashboard/chart', taxYear)));
-  return Array.isArray(points) ? points : [];
+export async function fetchChart(taxYear?: number): Promise<ChartResponse> {
+  return readJson<ChartResponse>(await fetch(withYear('/api/dashboard/chart', taxYear)));
 }
 
 export interface HomeOfficeFormResponse {

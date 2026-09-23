@@ -166,3 +166,66 @@ describe(`migration ${UNDER_TEST}`, () => {
     }
   });
 });
+
+/**
+ * The W-2, estimated payment and tax profile migration is additive: existing
+ * users and 1098-T rows must come through with the defaults and nothing else
+ * changed, and the new tables must be tied to User the way Prisma expects.
+ */
+describe('migration 20260923000000_w2_payments_profile', () => {
+  const NEW = '20260923000000_w2_payments_profile';
+  let db: PGlite;
+
+  beforeAll(async () => {
+    db = new PGlite();
+    const dirs = migrationDirs();
+    expect(dirs).toContain(NEW);
+    for (const dir of dirs) {
+      if (dir === NEW) break;
+      await db.exec(sqlOf(dir));
+    }
+    await db.exec(`
+      INSERT INTO "User" (id, name, email, "filingStatus") VALUES ('user_1', 'n', 'e', 'married_filing_separately');
+      INSERT INTO "Form1098T" (id, "userId", "taxYear", box1, box5) VALUES ('t_1', 'user_1', 2025, 4000, 6500.5);
+    `);
+    await db.exec(sqlOf(NEW));
+  }, 60_000);
+
+  afterAll(async () => {
+    await db?.close();
+  });
+
+  it('gives existing users spouseItemizes = false and keeps their filing status', async () => {
+    const res = await db.query<{ filingStatus: string; spouseItemizes: boolean }>('SELECT "filingStatus", "spouseItemizes" FROM "User"');
+    expect(res.rows).toEqual([{ filingStatus: 'married_filing_separately', spouseItemizes: false }]);
+  });
+
+  it('gives existing 1098-T rows a zero restricted amount and leaves the boxes alone', async () => {
+    const res = await db.query<{ box1: string; box5: string; r: string }>('SELECT box1::text, box5::text, "restrictedToNonQualifiedExpenses"::text AS r FROM "Form1098T"');
+    expect(res.rows).toEqual([{ box1: '4000.00', box5: '6500.50', r: '0.00' }]);
+  });
+
+  it('creates W2Form with money as DECIMAL(12,2), optional boxes defaulting to zero and the owner defaulting to the taxpayer', async () => {
+    await db.exec(`INSERT INTO "W2Form" (id, "userId", "taxYear", employer, wages, "socialSecurityWages", "medicareWages") VALUES ('w_1', 'user_1', 2025, 'Cafe', 1234.567, 1234.567, 1234.567)`);
+    const res = await db.query<Record<string, unknown>>('SELECT wages::text, "federalWithheld"::text AS fw, "socialSecurityTips"::text AS tips, "medicareWithheld"::text AS mw, "ownedByTaxpayer" FROM "W2Form"');
+    expect(res.rows).toEqual([{ wages: '1234.57', fw: '0.00', tips: '0.00', mw: '0.00', ownedByTaxpayer: true }]);
+  });
+
+  it('creates EstimatedTaxPayment keyed by tax year', async () => {
+    await db.exec(`INSERT INTO "EstimatedTaxPayment" (id, "userId", "taxYear", "paidOn", amount) VALUES ('p_1', 'user_1', 2025, '2026-01-15', 800)`);
+    const res = await db.query<{ taxYear: number; amount: string; note: string | null }>('SELECT "taxYear", amount::text, note FROM "EstimatedTaxPayment"');
+    expect(res.rows).toEqual([{ taxYear: 2025, amount: '800.00', note: null }]);
+  });
+
+  it('ties both tables to User: an unknown user is refused, and a user with rows cannot be deleted first', async () => {
+    await expect(db.exec(`INSERT INTO "W2Form" (id, "userId", "taxYear", employer, wages, "socialSecurityWages", "medicareWages") VALUES ('w_x', 'nobody', 2025, 'x', 1, 1, 1)`)).rejects.toThrow();
+    await expect(db.exec(`INSERT INTO "EstimatedTaxPayment" (id, "userId", "taxYear", "paidOn", amount) VALUES ('p_x', 'nobody', 2025, now(), 1)`)).rejects.toThrow();
+    // ON DELETE RESTRICT, like every other table: the Clerk webhook deletes children first.
+    await expect(db.exec(`DELETE FROM "User" WHERE id = 'user_1'`)).rejects.toThrow();
+  });
+
+  it('indexes both tables by (userId, taxYear), the only way the app reads them', async () => {
+    const res = await db.query<{ indexname: string }>(`SELECT indexname FROM pg_indexes WHERE tablename IN ('W2Form', 'EstimatedTaxPayment') AND indexname LIKE '%userId_taxYear%' ORDER BY indexname`);
+    expect(res.rows.map((r) => r.indexname)).toEqual(['EstimatedTaxPayment_userId_taxYear_idx', 'W2Form_userId_taxYear_idx']);
+  });
+});

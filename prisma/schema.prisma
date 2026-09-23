@@ -26,17 +26,27 @@ model User {
   // standard deduction (IRC §63(c)(5)) and bars the student loan interest
   // deduction (§221(c)).
   claimedAsDependent Boolean @default(false)
+  // Married filing separately only: the spouse itemizes, so this taxpayer may
+  // not take the standard deduction (IRC §63(c)(6)(A)). Read by the engine;
+  // ignored for every other filing status.
+  spouseItemizes     Boolean @default(false)
+  // When the user last saved the three fields above on the Tax profile page.
+  // Null means never: filingStatus then holds the column default, not a
+  // choice, and the estimate says it assumed single.
+  taxProfileSavedAt  DateTime?
 
-  incomeSources    IncomeSource[]
-  transactions     Transaction[]
-  plaidConnections PlaidConnection[]
-  mileageLogs      MileageLog[]
+  incomeSources     IncomeSource[]
+  transactions      Transaction[]
+  plaidConnections  PlaidConnection[]
+  mileageLogs       MileageLog[]
+  w2Forms           W2Form[]
+  estimatedPayments EstimatedTaxPayment[]
   // One row per tax year, not one per user: a 1098-T is a statement about a
   // particular year, and reusing last year's figures in this year's estimate
   // is simply wrong. Query these with `where: { taxYear }`.
-  form1098T        Form1098T[]
-  form1098E        Form1098E[]
-  homeOffice       HomeOfficeDeduction[]
+  form1098T         Form1098T[]
+  form1098E         Form1098E[]
+  homeOffice        HomeOfficeDeduction[]
 }
 
 model IncomeSource {
@@ -124,16 +134,72 @@ model PlaidConnection {
 }
 
 model Form1098T {
+  id                               String   @id @default(cuid())
+  userId                           String
+  user                             User     @relation(fields: [userId], references: [id])
+  /// The year the statement covers. Box 1 and Box 5 are year-specific.
+  taxYear                          Int
+  box1                             Decimal  @db.Decimal(12, 2) // Tuition & Related Expenses
+  box5                             Decimal  @db.Decimal(12, 2) // Scholarships & Grants
+  /// The part of Box 5 that the grant's own terms earmark for living costs
+  /// (room, board, travel). Always taxable, whatever tuition was paid. The
+  /// name matches what the tax adapter already reads.
+  restrictedToNonQualifiedExpenses Decimal  @default(0) @db.Decimal(12, 2)
+  createdAt                        DateTime @default(now())
+
+  @@unique([userId, taxYear])
+}
+
+/// One W-2 from an employer, for one tax year. Someone with several jobs has
+/// several. Wages are how a day job reaches the estimate: a paycheck deposit is
+/// deliberately not counted as income (category `w2_paycheck`), because the
+/// W-2's boxes, not the net deposit, are what the return uses.
+model W2Form {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+  taxYear  Int
+  /// What the user calls this job. Display only.
+  employer String
+
+  /// Box 1: wages, tips, other compensation. Form 1040 line 1a.
+  wages               Decimal @db.Decimal(12, 2)
+  /// Box 2: federal income tax withheld. Form 1040 line 25a.
+  federalWithheld     Decimal @default(0) @db.Decimal(12, 2)
+  /// Box 3: Social Security wages. With box 7, Schedule SE line 8a.
+  socialSecurityWages Decimal @db.Decimal(12, 2)
+  /// Box 7: Social Security tips.
+  socialSecurityTips  Decimal @default(0) @db.Decimal(12, 2)
+  /// Box 5: Medicare wages and tips. Form 8959.
+  medicareWages       Decimal @db.Decimal(12, 2)
+  /// Box 6: Medicare tax withheld. Above 1.45% of box 5 it is Additional
+  /// Medicare Tax withholding (Form 8959 Part V).
+  medicareWithheld    Decimal @default(0) @db.Decimal(12, 2)
+
+  /// Joint returns only: whether this is the W-2 of the person with the side
+  /// business. Schedule SE is per individual, so a spouse's wages must never
+  /// reduce the self-employed spouse's Social Security base.
+  ownedByTaxpayer Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, taxYear])
+}
+
+/// An estimated tax payment sent to the IRS (Form 1040-ES), counted on Form
+/// 1040 line 26. Attributed by `taxYear`, not by date: the fourth quarterly
+/// payment for a year is due in January of the next.
+model EstimatedTaxPayment {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id])
-  /// The year the statement covers. Box 1 and Box 5 are year-specific.
   taxYear   Int
-  box1      Decimal  @db.Decimal(12, 2) // Tuition & Related Expenses
-  box5      Decimal  @db.Decimal(12, 2) // Scholarships & Grants
+  paidOn    DateTime
+  amount    Decimal  @db.Decimal(12, 2)
+  note      String?
   createdAt DateTime @default(now())
 
-  @@unique([userId, taxYear])
+  @@index([userId, taxYear])
 }
 
 model Form1098E {
