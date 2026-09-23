@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '@prisma/client';
 
 vi.mock('@/lib/user', () => ({ requireUser: vi.fn() }));
 vi.mock('@/lib/crypto', () => ({
@@ -81,6 +82,28 @@ describe('Plaid sync adopts pre-plaidTransactionId rows', () => {
         where: expect.objectContaining({ userId: 'user_test', plaidTransactionId: null }),
       }),
     );
+  });
+
+  it('matches on a two-decimal Decimal, never on Plaid\'s raw JS number', async () => {
+    // Regression for a bug these mocks could not see: with the amount passed
+    // as the JS number 89.4, the real database found no match for three
+    // SparkFun rows stored as 89.40 (checked read-only on 2026-09-23 — 12 of
+    // 15 legacy rows matched as numbers, 15 of 15 as a toFixed(2) Decimal).
+    // This pins the representation that was verified against real rows.
+    vi.mocked(plaidClient.transactionsSync).mockResolvedValue({
+      data: { added: [{ ...TXN, amount: 89.4, name: 'SparkFun' }], modified: [], removed: [], has_more: false, next_cursor: 'def' },
+    } as never);
+    vi.mocked(prisma.transaction.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.transaction.findFirst).mockResolvedValue(null);
+
+    await POST();
+
+    const where = vi.mocked(prisma.transaction.findFirst).mock.calls[0][0]!.where as { amount: unknown };
+    expect(where.amount).toBeInstanceOf(Prisma.Decimal);
+    expect((where.amount as Prisma.Decimal).toFixed(2)).toBe('89.40');
+    // And what gets written is the same value, so a later lookup compares like with like.
+    const created = vi.mocked(prisma.transaction.create).mock.calls[0][0].data as { amount: unknown };
+    expect((created.amount as Prisma.Decimal).toFixed(2)).toBe('89.40');
   });
 
   it('creates a row when nothing matches', async () => {

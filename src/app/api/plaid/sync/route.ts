@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import type { RemovedTransaction, Transaction as PlaidTransaction } from 'plaid';
 import { plaidClient, describePlaidError } from '@/lib/plaid';
 import { prisma } from '@/lib/prisma';
@@ -85,7 +86,15 @@ export async function POST() {
 
       const fields = {
         userId,
-        amount: Math.abs(txn.amount),
+        // A Decimal built from exactly two decimals, never Plaid's raw JS
+        // number. Writes were fine either way — the DECIMAL(12,2) column
+        // rounds on insert — but the adoption lookup below compares for
+        // equality, where nothing rounds. Checked read-only against the 15
+        // legacy bank rows on 2026-09-23: as a JS number the lookup found
+        // only 12; all three SparkFun rows at $89.40 silently missed, and
+        // would have been duplicated instead of adopted. From a toFixed(2)
+        // string it found all 15.
+        amount: new Prisma.Decimal(Math.abs(txn.amount).toFixed(2)),
         type: isIncome ? 'Income' : 'Expense',
         date: new Date(txn.date),
         description: txn.name || 'Bank Transaction',
