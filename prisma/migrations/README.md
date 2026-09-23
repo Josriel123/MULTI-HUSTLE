@@ -58,22 +58,15 @@ afterwards, read-only: every one of those unchanged, `User.spouseItemizes`
 false and `taxProfileSavedAt` null on all eight users, the two new tables
 empty, seven migrations applied.
 
-**`20260924000000_consent_record` is committed; apply it before this release
-is deployed.** It only adds columns, so the release that is live now keeps
-working after it, and the new release needs it. With the dev server running
-or not:
-
-```bash
-npx prisma migrate deploy
-```
-
-Then stop the dev server, run `npx prisma generate`, and start it again.
-Measured on main immediately before, read-only (2026-09-23 14:30 UTC): 8
-users, 128 transactions summing 171,070.25, three 1098-T, two 1098-E, three
-home office rows, two mileage logs, ten income sources, three bank
-connections, no W-2s or payments; seven migrations applied; `User` has `plan`
-and none of the three new columns. After it runs, every count should be
-unchanged and the three new columns null on all eight users.
+**`20260924000000_consent_record` was applied to main on 2026-09-23** by the
+owner, before the release that uses it was pushed (D47). Measured read-only
+immediately before (14:30 UTC): 8 users, 128 transactions summing 171,070.25,
+three 1098-T, two 1098-E, three home office rows, two mileage logs, ten income
+sources, three bank connections, no W-2s or payments; seven migrations
+applied; `User` had `plan` and none of the three new columns. Checked
+afterwards, read-only: every count unchanged, the three columns present,
+nullable and null on all eight users (so each is asked to agree once), `plan`
+untouched, eight migrations applied, none rolled back.
 
 **Next, after this release is live: drop `User.plan`.** Nothing reads it (it
 held the string "Pro Plan" on every row, for a plan that does not exist), and
