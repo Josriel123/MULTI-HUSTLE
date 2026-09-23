@@ -83,7 +83,8 @@ Responsive rules, mobile first:
 | `ui/PageHeader` | Title, one-sentence description, optional icon badge, `actions` slot. |
 | `ui/Busy` | Wrap content that is loading or refreshing; dims it in place and sets `aria-busy`. Do not swap to a spinner; figures must not jump when the year changes. |
 | `ui/InlineStatus` | The result of an action (`ok`, `error`, `info`) where it happened. Replaces `alert()` and `window.location.reload()`. |
-| `EstimateNotice` | Disclaimer, warnings and collapsed assumptions. Mandatory next to figures. |
+| `ui/ConfirmDialog` (`useConfirm`) | Ask before anything destructive: `const [confirm, dialog] = useConfirm()`, then `if (!(await confirm({ title, tone: 'danger' }))) return;` and render `{dialog}` once. **Never `window.confirm()`** — it freezes the page's JavaScript while open, which stalls Clerk's background token refresh; a delete confirmed after a long pause can go out on an expired session. |
+| `EstimateNotice` | Disclaimer, warnings, and the assumptions and not-modeled lists — collapsed on screen, always expanded in print. Mandatory next to figures. |
 | `TaxYearSelect` | Year picker fed by the engine's `SUPPORTED_TAX_YEARS`. Every year-scoped page has one in its header; pass the year to every fetch and POST. |
 | `PlaidLinkButton` | Connect / sync. |
 | `SidebarNav`, `AppShell` | Frame. |
@@ -114,9 +115,16 @@ such as `other_business_expense` must never render.
    not a reason to compute it in the page.
 4. Cards, fields, buttons, badges from `ui/`. No `style={{}}`.
 5. `EstimateNotice` under the figures. `Busy` around the data region.
-6. Replace `alert()`/`reload()` with `InlineStatus` and a re-fetch.
+6. Replace `alert()`/`reload()` with `InlineStatus` and a re-fetch, and
+   `confirm()` with `useConfirm`. Browser dialogs block the page; none remain.
 7. Check the phone layout (375px) and the print layout if the page prints.
-8. Remove any legacy class the page no longer needs from `globals.css`.
+   A closed `<details>` does not print its contents — anything a reader of
+   the paper copy needs must have a print-only expanded copy, as
+   `EstimateNotice` does.
+8. A page that loads several things loads them with `Promise.allSettled` and
+   applies each result on its own, so one failing request (usually the
+   estimate) cannot blank data that did load.
+9. Remove any legacy class the page no longer needs from `globals.css`.
 
 ### Remaining pages
 

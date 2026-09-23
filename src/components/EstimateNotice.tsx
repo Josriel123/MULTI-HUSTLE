@@ -32,7 +32,14 @@ export function EstimateNotice({ disclaimer, warnings, assumptions, notModeled, 
   return (
     <section
       aria-label="About this estimate"
-      className={cn('rounded-card border border-border bg-card px-4 py-4 md:px-6 md:py-5', className)}
+      // In print the box styling is dropped: once the lists are expanded the
+      // notice can run past a page, and a bordered box sliced by a page break
+      // left a stray border line at the top of page 2 (second e2e pass).
+      className={cn(
+        'rounded-card border border-border bg-card px-4 py-4 md:px-6 md:py-5',
+        'print:rounded-none print:border-0 print:bg-transparent print:p-0',
+        className,
+      )}
     >
       {disclaimer && (
         <div className="flex items-start gap-3">
@@ -46,13 +53,13 @@ export function EstimateNotice({ disclaimer, warnings, assumptions, notModeled, 
 
       {list.length > 0 && (
         <div className={cn(disclaimer && 'mt-4 border-t border-border pt-4')}>
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-danger">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-danger print:break-after-avoid">
             <AlertTriangle size={16} aria-hidden />
             Estimate notices ({list.length})
           </h3>
           <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5 text-sm leading-relaxed text-fg-muted">
             {list.map((w, i) => (
-              <li key={`${w.code}-${i}`}>
+              <li key={`${w.code}-${i}`} className="print:break-inside-avoid">
                 {w.message}
                 {w.amount ? <span className="text-fg-faint"> (affects about {formatCurrency(w.amount)})</span> : null}
               </li>
@@ -62,30 +69,48 @@ export function EstimateNotice({ disclaimer, warnings, assumptions, notModeled, 
       )}
 
       {assumptions && assumptions.length > 0 && (
-        <details className="mt-4 border-t border-border pt-3 text-sm text-fg-muted">
-          <summary className="cursor-pointer font-medium text-fg-muted hover:text-fg">
-            Assumptions this estimate makes ({assumptions.length})
-          </summary>
-          <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5 leading-relaxed">
-            {assumptions.map((a, i) => (
-              <li key={i}>{a}</li>
-            ))}
-          </ul>
-        </details>
+        <CollapsibleList title={`Assumptions this estimate makes (${assumptions.length})`} items={assumptions} />
       )}
 
       {notModeled && notModeled.length > 0 && (
-        <details className="mt-4 border-t border-border pt-3 text-sm text-fg-muted">
-          <summary className="cursor-pointer font-medium text-fg-muted hover:text-fg">
-            Tax items not modeled by this engine ({notModeled.length})
-          </summary>
-          <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5 leading-relaxed">
-            {notModeled.map((item, i) => (
-              <li key={i}>{item}</li>
-            ))}
-          </ul>
-        </details>
+        <CollapsibleList title={`Tax items not modeled by this engine (${notModeled.length})`} items={notModeled} />
       )}
     </section>
+  );
+}
+
+/**
+ * Collapsed on screen, always expanded on paper.
+ *
+ * Browsers do not print the contents of a closed `<details>`, and paper has no
+ * way to open one — the second e2e pass found the CPA organizer printing these
+ * two headings with nothing under them, on the one document meant to leave the
+ * app. So the list is rendered twice: the `<details>` for the screen, hidden
+ * in print, and a plain copy that exists only in print. `hidden` keeps the
+ * copy out of the accessibility tree on screen, so it is not read twice.
+ */
+function CollapsibleList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <>
+      <details className="mt-4 border-t border-border pt-3 text-sm text-fg-muted print:hidden">
+        <summary className="cursor-pointer font-medium text-fg-muted hover:text-fg">{title}</summary>
+        <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5 leading-relaxed">
+          {items.map((item, i) => (
+            <li key={i}>{item}</li>
+          ))}
+        </ul>
+      </details>
+
+      <div className="mt-4 hidden border-t border-border pt-3 text-sm text-fg-muted print:block" data-print-copy>
+        <h3 className="font-medium text-fg print:break-after-avoid">{title}</h3>
+        <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5 leading-relaxed">
+          {items.map((item, i) => (
+            <li key={i} className="print:break-inside-avoid">
+              {item}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
   );
 }

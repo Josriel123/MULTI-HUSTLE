@@ -5,11 +5,14 @@ import { PlusCircle, Trash2 } from 'lucide-react';
 import {
   createMileage,
   deleteMileage,
+  errorText,
   type MileageLogItem,
+  type MileageRatePeriodPayload,
 } from './api';
-import { defaultTransactionDate, formatCurrency, formatDate, formatMiles } from './format';
+import { defaultTransactionDate, formatCurrency, formatDate, formatMiles, mileageRateSummary } from './format';
 import { Button } from './ui/Button';
 import { Card, CardDescription, CardHeader, CardTitle } from './ui/Card';
+import { useConfirm } from './ui/ConfirmDialog';
 import { Field, FieldGrid, Input } from './ui/Field';
 import { InlineStatus } from './ui/InlineStatus';
 import { StatCard } from './ui/StatCard';
@@ -18,6 +21,8 @@ export interface MileageSectionProps {
   logs: MileageLogItem[];
   totalMiles: string;
   totalDeduction: string;
+  /** The selected year's standard mileage rate(s), from the API. */
+  ratePeriods: MileageRatePeriodPayload[];
   taxYear?: number;
   onRefresh: () => Promise<void>;
 }
@@ -26,11 +31,14 @@ export function MileageSection({
   logs,
   totalMiles,
   totalDeduction,
+  ratePeriods,
   taxYear,
   onRefresh,
 }: MileageSectionProps) {
+  const [confirm, confirmDialog] = useConfirm();
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const [listStatus, setListStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [formData, setFormData] = useState(() => ({
     date: defaultTransactionDate(taxYear),
     miles: '',
@@ -72,17 +80,28 @@ export function MileageSection({
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Are you sure you want to delete this mileage entry?')) return;
+    const ok = await confirm({
+      title: 'Delete this trip?',
+      body: 'Its miles come off Schedule C line 9 and the estimate is recalculated. This cannot be undone.',
+      confirmLabel: 'Delete trip',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    setListStatus(null);
     try {
       await deleteMileage(id);
       await onRefresh();
+      setListStatus({ kind: 'ok', text: 'Trip deleted.' });
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to delete mileage log.');
+      setListStatus({ kind: 'error', text: errorText(err, 'Failed to delete the trip.') });
     }
   }
 
-  // Derive current statutory rate from latest log or state
-  const latestRate = logs.length > 0 ? logs[0].ratePerMile : '0.725';
+  // From the engine, via the API. This used to copy the rate off the latest
+  // trip and, once the last trip was deleted, fall back to a '0.725' typed
+  // into this file — the Jan-Jun 2026 rate, wrong from July 1 and for every
+  // other year (second e2e pass, S2).
+  const rate = mileageRateSummary(ratePeriods, new Date().toISOString().slice(0, 10));
 
   return (
     <div className="flex flex-col gap-6 md:gap-8">
@@ -95,16 +114,18 @@ export function MileageSection({
           accent="neutral"
         />
         <StatCard
-          label="Current IRS Rate"
-          value={`$${latestRate}/mi`}
-          caption="Notice 2026-10 / Announcement 2026-11 statutory pricing"
+          label="IRS standard mileage rate"
+          value={rate?.rate ?? '—'}
+          caption={rate?.caption ?? 'No rate on file for this tax year.'}
           accent="info"
           tone="default"
         />
         <StatCard
-          label="Standard Deduction"
+          // Not "Standard Deduction": that is Form 1040 line 12, a different
+          // figure entirely. This is the mileage deduction on Schedule C.
+          label="Mileage deduction"
           value={formatCurrency(totalDeduction, { cents: true })}
-          caption="Schedule C line 9 deduction applied to delivery income"
+          caption="Schedule C line 9, each trip at the rate in force on its date"
           accent="accent"
           tone="accent"
         />
@@ -185,6 +206,13 @@ export function MileageSection({
             </CardDescription>
           </div>
         </CardHeader>
+
+        {/* Delete results belong next to the list they changed, not in the form above. */}
+        {listStatus && (
+          <div className="mb-4">
+            <InlineStatus kind={listStatus.kind}>{listStatus.text}</InlineStatus>
+          </div>
+        )}
 
         {logs.length === 0 ? (
           <div className="py-12 text-center text-sm text-fg-muted">
@@ -281,6 +309,8 @@ export function MileageSection({
           </>
         )}
       </Card>
+
+      {confirmDialog}
     </div>
   );
 }

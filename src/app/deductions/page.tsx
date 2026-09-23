@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Activity, Car, Receipt } from 'lucide-react';
 import { EstimateNotice } from '@/components/EstimateNotice';
 import { MileageSection } from '@/components/MileageSection';
@@ -8,10 +8,12 @@ import { TaxYearSelect } from '@/components/TaxYearSelect';
 import { TransactionLedger } from '@/components/TransactionLedger';
 import { useTaxYear } from '@/components/useTaxYear';
 import {
+  errorText,
   fetchMileage,
   fetchSummary,
   fetchTransactions,
   type MileageLogItem,
+  type MileageRatePeriodPayload,
   type SummaryResponse,
   type TransactionItem,
 } from '@/components/api';
@@ -35,6 +37,9 @@ export default function DeductionsPage() {
   const [mileageLogs, setMileageLogs] = useState<MileageLogItem[]>([]);
   const [totalMiles, setTotalMiles] = useState('0.00');
   const [totalMileageDeduction, setTotalMileageDeduction] = useState('0.00');
+  const [ratePeriods, setRatePeriods] = useState<MileageRatePeriodPayload[]>([]);
+  /** The year the mileage endpoint answered for; independent of the estimate. */
+  const [dataYear, setDataYear] = useState<number | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
   // Loading is derived from request key
@@ -42,41 +47,40 @@ export default function DeductionsPage() {
   const requestKey = taxYear === undefined ? 'default' : String(taxYear);
   const loading = resolvedKey !== requestKey;
 
-  async function loadData() {
-    try {
-      const [sumRes, txRes, mileRes] = await Promise.all([
-        fetchSummary(taxYear),
-        fetchTransactions(taxYear),
-        fetchMileage(taxYear),
-      ]);
-      setSummary(sumRes);
-      setTransactions(txRes);
-      setMileageLogs(mileRes.logs || []);
-      setTotalMiles(mileRes.totalMiles || '0.00');
-      setTotalMileageDeduction(mileRes.totalDeduction || '0.00');
-      setError(null);
-    } catch (err: unknown) {
-      console.error('Failed to load deductions data', err);
-      setError(err instanceof Error ? err.message : 'Failed to load ledger data.');
+  // The three requests are independent, so each result is applied on its own.
+  // With Promise.all, a failing estimate discarded the ledger and the trip log
+  // too, although both had loaded — the same coupling the e2e audit found on
+  // the student and home office pages (F8), which were fixed first.
+  const fetchAll = useCallback(
+    () => Promise.allSettled([fetchSummary(taxYear), fetchTransactions(taxYear), fetchMileage(taxYear)]),
+    [taxYear],
+  );
+
+  // Only state setters and a module import: stable across renders.
+  const apply = useCallback(([sumRes, txRes, mileRes]: Awaited<ReturnType<typeof fetchAll>>) => {
+    setSummary(sumRes.status === 'fulfilled' ? sumRes.value : null);
+    if (txRes.status === 'fulfilled') setTransactions(txRes.value);
+    if (mileRes.status === 'fulfilled') {
+      setMileageLogs(mileRes.value.logs || []);
+      setTotalMiles(mileRes.value.totalMiles || '0.00');
+      setTotalMileageDeduction(mileRes.value.totalDeduction || '0.00');
+      setRatePeriods(mileRes.value.ratePeriods || []);
+      setDataYear(mileRes.value.taxYear);
     }
+    const failed = [sumRes, txRes, mileRes].find((r) => r.status === 'rejected');
+    if (failed) console.error('Failed to load part of the deductions page', failed.reason);
+    setError(failed ? errorText(failed.reason, 'Failed to load part of this page.') : null);
+  }, []);
+
+  async function loadData() {
+    apply(await fetchAll());
   }
 
   useEffect(() => {
     let ignore = false;
-    Promise.all([fetchSummary(taxYear), fetchTransactions(taxYear), fetchMileage(taxYear)])
-      .then(([sumRes, txRes, mileRes]) => {
-        if (ignore) return;
-        setSummary(sumRes);
-        setTransactions(txRes);
-        setMileageLogs(mileRes.logs || []);
-        setTotalMiles(mileRes.totalMiles || '0.00');
-        setTotalMileageDeduction(mileRes.totalDeduction || '0.00');
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        if (ignore) return;
-        console.error('Failed to load deductions data', err);
-        setError(err instanceof Error ? err.message : 'Failed to load ledger data.');
+    fetchAll()
+      .then((results) => {
+        if (!ignore) apply(results);
       })
       .finally(() => {
         if (!ignore) setResolvedKey(requestKey);
@@ -84,9 +88,11 @@ export default function DeductionsPage() {
     return () => {
       ignore = true;
     };
-  }, [taxYear, requestKey]);
+  }, [fetchAll, apply, requestKey]);
 
-  const shownYear = summary?.taxYear ?? taxYear;
+  // The mileage response states its year, independent of the estimate, so a
+  // failing estimate no longer leaves this undefined.
+  const shownYear = summary?.taxYear ?? dataYear ?? taxYear;
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 pb-12 md:gap-8">
@@ -136,6 +142,7 @@ export default function DeductionsPage() {
             logs={mileageLogs}
             totalMiles={totalMiles}
             totalDeduction={totalMileageDeduction}
+            ratePeriods={ratePeriods}
             taxYear={shownYear}
             onRefresh={loadData}
           />

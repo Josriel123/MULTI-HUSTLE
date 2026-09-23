@@ -208,11 +208,25 @@ export interface MileageLogItem {
   deduction: string;
 }
 
+/** One standard mileage rate period, as the engine's parameters define it. */
+export interface MileageRatePeriodPayload {
+  /** ISO date, inclusive. */
+  from: string;
+  /** ISO date, inclusive. */
+  to: string;
+  /** Cents per mile as a decimal string: "72.5", "76". */
+  centsPerMile: string;
+  /** The IRS notice that set it. */
+  citation: string;
+}
+
 export interface MileageResponse {
   taxYear: number;
   totalMiles: string;
   totalDeduction: string;
   logs: MileageLogItem[];
+  /** The selected year's rate(s). More than one when the IRS changed it mid-year. */
+  ratePeriods: MileageRatePeriodPayload[];
   warnings?: TaxWarning[];
 }
 

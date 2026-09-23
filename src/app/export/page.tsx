@@ -65,10 +65,9 @@ export default function CPAExporter() {
   };
 
   const exportCSV = () => {
-    if (!transactionData || transactionData.length === 0) {
-      alert('No transactions found for export.');
-      return;
-    }
+    // The button is disabled when there is nothing to export; this guard only
+    // covers a click that races the data loading.
+    if (!transactionData || transactionData.length === 0) return;
 
     let csvContent = 'data:text/csv;charset=utf-8,';
     csvContent += 'Date,Type,Amount,Category,Description,Is Tax Deductible,Source\n';
@@ -140,12 +139,15 @@ export default function CPAExporter() {
           actions={
             <div className="flex flex-wrap items-center gap-3">
               <TaxYearSelect value={shownYear} onChange={setTaxYear} />
+              {/* Disabled, with the reason in its label, rather than offering a
+                  download that can only answer with an alert() box. */}
               <Button
                 variant="secondary"
                 onClick={exportCSV}
+                disabled={rowCount === 0}
                 icon={<FileText size={16} aria-hidden />}
               >
-                Raw Ledger (.CSV)
+                {rowCount === 0 ? `No transactions for ${shownYear ?? 'this year'}` : 'Raw Ledger (.CSV)'}
               </Button>
               <Button
                 variant="primary"

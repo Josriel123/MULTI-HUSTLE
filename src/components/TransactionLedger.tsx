@@ -6,9 +6,11 @@ import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, isDeductibleExpenseCategory } fr
 import {
   createTransaction,
   deleteTransaction,
+  errorText,
   updateTransaction,
   type TransactionItem,
 } from './api';
+import { useConfirm } from './ui/ConfirmDialog';
 import { categoryLabel, defaultTransactionDate, formatCurrency, formatDate } from './format';
 import { Badge, type BadgeTone } from './ui/Badge';
 import { Button } from './ui/Button';
@@ -77,6 +79,10 @@ export interface TransactionLedgerProps {
 }
 
 export function TransactionLedger({ transactions, taxYear, onRefresh }: TransactionLedgerProps) {
+  const [confirm, confirmDialog] = useConfirm();
+  /** Delete results, shown beside the ledger they changed. */
+  const [listStatus, setListStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+
   // New transaction form state
   const [submitting, setSubmitting] = useState(false);
   const [formStatus, setFormStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
@@ -190,12 +196,21 @@ export function TransactionLedger({ transactions, taxYear, onRefresh }: Transact
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Are you sure you want to delete this transaction?')) return;
+    // In-app dialog, not window.confirm(): see ConfirmDialog for why.
+    const ok = await confirm({
+      title: 'Delete this transaction?',
+      body: 'It leaves the ledger and the estimate is recalculated. This cannot be undone.',
+      confirmLabel: 'Delete transaction',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    setListStatus(null);
     try {
       await deleteTransaction(id);
       await onRefresh();
+      setListStatus({ kind: 'ok', text: 'Transaction deleted.' });
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to delete transaction.');
+      setListStatus({ kind: 'error', text: errorText(err, 'Failed to delete the transaction.') });
     }
   }
 
@@ -348,6 +363,12 @@ export function TransactionLedger({ transactions, taxYear, onRefresh }: Transact
             </Button>
           </div>
         </CardHeader>
+
+        {listStatus && (
+          <div className="mb-4">
+            <InlineStatus kind={listStatus.kind}>{listStatus.text}</InlineStatus>
+          </div>
+        )}
 
         {filteredTransactions.length === 0 ? (
           <div className="py-12 text-center text-sm text-fg-muted">
@@ -605,6 +626,8 @@ export function TransactionLedger({ transactions, taxYear, onRefresh }: Transact
           </div>
         </div>
       )}
+
+      {confirmDialog}
     </div>
   );
 }

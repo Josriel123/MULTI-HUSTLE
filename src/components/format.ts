@@ -116,3 +116,57 @@ export function formatDate(value: string | Date | null | undefined): string {
   if (Number.isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 }
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "2026-07-01" to "Jul 1", read as a calendar date with no time zone involved. */
+function shortDate(iso: string): string {
+  const [, m, d] = iso.split('-').map(Number);
+  return `${MONTHS[m - 1]} ${d}`;
+}
+
+/**
+ * Cents per mile ("72.5", "76") to a dollar rate ("$0.725/mi", "$0.76/mi").
+ *
+ * Done on the string, not as floating point: shifting the decimal point two
+ * places is exact, and the IRS announces rates to the half cent.
+ */
+export function formatMileageRate(centsPerMile: string): string {
+  const [whole, frac = ''] = centsPerMile.trim().split('.');
+  const digits = whole.padStart(3, '0'); // "72" -> "072": at least one dollar digit
+  const dollars = digits.slice(0, -2).replace(/^0+(?=\d)/, '');
+  const decimals = (digits.slice(-2) + frac).replace(/0+$/, '').padEnd(2, '0');
+  return `$${dollars}.${decimals}/mi`;
+}
+
+export interface MileageRateSummary {
+  /** The rate to headline. */
+  rate: string;
+  /** One line under it: the notice for a single rate, or every period when there are several. */
+  caption: string;
+}
+
+/**
+ * What the mileage rate card shows for a tax year.
+ *
+ * One period: that rate, captioned with the notice that set it. Several (the
+ * IRS raised the 2026 rate on July 1): the rate in force today when today falls
+ * inside the year, otherwise the last one, with every period in the caption so
+ * a mid-year change is never hidden — trips before the change are priced at
+ * the earlier rate. `todayIso` is a parameter so this stays a pure function.
+ */
+export function mileageRateSummary(
+  periods: ReadonlyArray<{ from: string; to: string; centsPerMile: string; citation: string }>,
+  todayIso: string,
+): MileageRateSummary | null {
+  if (periods.length === 0) return null;
+  if (periods.length === 1) {
+    return { rate: formatMileageRate(periods[0].centsPerMile), caption: periods[0].citation };
+  }
+  const inForce = periods.find((p) => p.from <= todayIso && todayIso <= p.to) ?? periods[periods.length - 1];
+  const list = periods.map((p) => `${formatMileageRate(p.centsPerMile).replace('/mi', '')} ${shortDate(p.from)}–${shortDate(p.to)}`);
+  return {
+    rate: formatMileageRate(inForce.centsPerMile),
+    caption: `Changed mid-year: ${list.join(', ')}. Each trip is priced on its date.`,
+  };
+}
