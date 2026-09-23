@@ -58,6 +58,13 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
+Measured on main immediately before, read-only (2026-09-23): 8 users, 128
+transactions summing 171,070.25, three 1098-T rows, two 1098-E rows, three
+home office rows, two mileage logs, ten income sources; six migrations applied.
+After it runs, every one of those should be unchanged, `User.spouseItemizes`
+false and `taxProfileSavedAt` null on all eight users, and the two new tables
+empty.
+
 ## Applying to another existing database (created with `db push`)
 
 Such a database already has the baseline tables, so tell Prisma the baseline
