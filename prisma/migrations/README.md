@@ -23,16 +23,15 @@ columns carry their defaults. From here on, schema changes go through
 `prisma migrate` so `_prisma_migrations` stays in step; `db push` would leave
 it behind.
 
-**`20260916000000_category_is_source_of_truth` is committed but NOT yet
-applied to main** (2026-09-16: the agent's `prisma migrate deploy` was refused
-by the auto-mode permission classifier as a production change). Run:
+**`20260916000000_category_is_source_of_truth` was applied to main on
+2026-09-17**, by the owner: the agent's `prisma migrate deploy` had been refused
+by the auto-mode permission classifier as a production change. It is data-only,
+so no `prisma generate` was needed. Checked afterwards, read-only: no row's
+`taxDeductible` flag disagrees with its category.
 
-```bash
-npx prisma migrate deploy
-```
-
-Measured on main immediately before, read-only: 31 transactions summing to
-101,135.83. The script will touch exactly four rows, all manual entries:
+Measured on main immediately before, read-only: 31 transactions across all
+users, summing to 101,135.83. The script touched exactly four rows, all manual
+entries:
 
 | Row | Before | After |
 |---|---|---|
@@ -41,13 +40,13 @@ Measured on main immediately before, read-only: 31 transactions summing to
 | $500.00 "gas", 2026-04-18 | no category, flag true | `other_business_expense`, flag true |
 | $200.00 "Gas", 2026-04-18 | no category, flag true | `other_business_expense`, flag true |
 
-No Plaid-synced row changes; no row with an unknown category string exists.
-Until it runs, the engine (which no longer reads the flag) deducts the $123.45
-office expense for 2025 and treats the three uncategorised rows as personal
-with an `uncategorised_expenses` warning; after it runs, the audit row is
-personal and the three rows are deducted as before. Row count and amount sum
-must be unchanged afterwards; the two "gas" rows are worth re-categorising as
-`car_and_truck` by hand so the one-method vehicle rule sees them.
+No Plaid-synced row changed, and no row carried an unknown category string.
+Before it ran, the engine (which no longer reads the flag) deducted the $123.45
+office expense for 2025 and treated the three uncategorised rows as personal
+with an `uncategorised_expenses` warning; since, the audit row is personal and
+the three rows are deducted as before. The two "gas" rows are worth
+re-categorising as `car_and_truck` by hand so the one-method vehicle rule sees
+them.
 
 ## Applying to another existing database (created with `db push`)
 

@@ -1,178 +1,178 @@
-# 💸 Multi-Hustle Tax Dashboard
+# Multi-Hustle
 
-> A full-stack financial dashboard built for gig workers and multi-income earners — tracking freelance, delivery, and student finances with real-time tax optimization.
+> A federal tax estimator for people with several income streams — gig work,
+> freelancing, scholarships — built around an engine that cites every rule it
+> applies.
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)
 ![Prisma](https://img.shields.io/badge/Prisma-5-2D3748?logo=prisma)
 ![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-4-38bdf8?logo=tailwindcss)
 ![Clerk](https://img.shields.io/badge/Auth-Clerk-6C47FF?logo=clerk)
-![Plaid](https://img.shields.io/badge/Banking-Plaid-00D64F)
+![Plaid](https://img.shields.io/badge/Banking-Plaid_sandbox-00D64F)
 
----
+Connect a bank through Plaid's sandbox or enter transactions by hand, give each
+one a tax category, log business mileage, and add a 1098-T, a 1098-E and a home
+office. The app turns that into a line-by-line federal estimate in Form 1040
+order — Schedule C, Schedule SE, the QBI deduction, the standard deduction,
+income tax — with the rule behind each line, and exports an organizer for a tax
+preparer.
 
-## 🧠 Overview
+> **This is an estimate for planning, not tax advice.** It covers federal
+> income and self-employment tax only, leaves out every tax credit (so it runs
+> high), and says on screen and on paper what else it does not model.
 
-The **Multi-Hustle Tax Dashboard** is a SaaS-style financial tool designed for people juggling multiple income streams — freelance development, gig delivery work, investments, and student finances. It connects to real bank accounts via Plaid, automatically categorizes transactions, and calculates your true "safe-to-spend" net income after estimated tax liability.
+## What's worth a look
 
-Built with the modern full-stack: **Next.js App Router**, **Prisma ORM**, **PostgreSQL**, and **Clerk authentication**.
+**A tax engine you can check.** `src/lib/tax/` is pure functions — no
+database, network or auth — that follow the order of Form 1040. Every rule
+cites its source: the Internal Revenue Code section, the IRS Revenue Procedure
+or the form line. Parameters for 2024–2026 are transcribed from the Revenue
+Procedures; every function has known-answer tests, and the bracket tables are
+also checked against the auditor's independent transcription at 270 boundary
+points. Its [README](src/lib/tax/README.md) walks through the computation order
+and the sources.
 
----
+**Independent audits, not only tests.** The engine was written by one AI model
+and audited cold by a model from a different lab, which found 11 problems and
+no parameter errors — including a misread statute that the engine's own test
+enforced. Two browser end-to-end passes followed and found 11 more bugs between
+them; the engine was correct, and the code around it was dropping or
+misreporting its inputs. Every finding was triaged and fixed — the engine's
+fixes each starting from the auditor's counterexample, ported as a test that
+failed first — and all of it is linked from [`docs/audits/`](docs/audits/).
 
-## ✨ Features
+**Exact money.** Amounts are `DECIMAL(12,2)` from the database to the page,
+cross the API as strings, and are formatted only at the last moment. The one
+place a JavaScript number slipped into a comparison was caught by a read-only
+check against real rows — 12 of 15 matched until it was fixed.
 
-- **📊 Real-Time Dashboard** — Visualizes gross income, true net income, and estimated tax liability with an animated area chart
-- **🏦 Plaid Bank Integration** — Connect live bank/gig accounts to sync transactions automatically
-- **🧾 Tax Deduction Tracker** — Log freelance hardware purchases, home office deductions, and mileage
-- **🎓 Student Finance Module** — Supports Form 1098-T (tuition) and Form 1098-E (student loan interest)
-- **🏠 Home Office Deduction Calculator** — Square footage-based deduction estimation
-- **📤 CPA Export** — Generate printer-friendly tax organizer reports
-- **🔐 Auth via Clerk** — Secure, session-based authentication with user profiles
+**Honest about its limits.** When the engine cannot know a fact that would
+change the answer, it either assumes the conservative reading or makes the
+likely assumption and warns — and every figure on screen carries the
+disclaimer, the warnings and the assumptions that qualify it.
 
----
+Why things are built the way they are is recorded in the
+[decision log](docs/decision-log.md).
 
-## 🛠️ Tech Stack
+## Stack
 
-| Layer       | Technology                              |
-|-------------|------------------------------------------|
-| Framework   | Next.js 16 (App Router)                  |
-| Language    | TypeScript 5                             |
-| Styling     | Tailwind CSS 4                           |
-| Database    | PostgreSQL (via Neon) + SQLite (dev)     |
-| ORM         | Prisma 5                                 |
-| Auth        | Clerk                                    |
-| Banking API | Plaid                                    |
-| Charts      | Recharts                                 |
-| Icons       | Lucide React                             |
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 16 (App Router; middleware is called Proxy here) |
+| Language | TypeScript 5 |
+| UI | React 19, Tailwind CSS 4, Recharts, Lucide icons |
+| Database | PostgreSQL on Neon, through Prisma 5 |
+| Auth | Clerk |
+| Banking | Plaid (sandbox only) |
+| Tests | Vitest; PGlite for running the SQL migrations in-process |
 
----
+## Running it locally
 
-## 🗂️ Project Structure
-
-```
-src/
-├── app/
-│   ├── page.tsx          # Main dashboard (overview)
-│   ├── deductions/       # Tax deduction logger
-│   ├── student/          # 1098-T & 1098-E forms
-│   ├── office/           # Home office deduction calculator
-│   ├── export/           # CPA report exporter
-│   └── api/              # API routes (dashboard, Plaid, transactions)
-├── components/           # Shared UI components (PlaidLinkButton, etc.)
-└── lib/                  # Prisma client, utilities
-```
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- A [Neon](https://neon.tech) or PostgreSQL database
-- A [Plaid](https://plaid.com/docs/quickstart/) developer account (Sandbox)
-- A [Clerk](https://clerk.com) application
-
-### 1. Clone the Repository
+You need **Node 20.9 or newer**, a [Neon](https://neon.tech) database, a
+[Clerk](https://clerk.com) application and a [Plaid](https://dashboard.plaid.com)
+developer account (sandbox access is immediate).
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/tax-dashboard.git
-cd tax-dashboard
-```
-
-### 2. Install Dependencies
-
-```bash
+git clone https://github.com/Josriel123/MULTI-HUSTLE.git
+cd MULTI-HUSTLE
 npm install
+cp .env.example .env
 ```
 
-### 3. Configure Environment Variables
+Fill in `.env` — **`.env`, not `.env.local`**: the Prisma CLI reads only `.env`.
 
-Create a `.env.local` file in the root:
+| Variable | Where it comes from |
+|---|---|
+| `DATABASE_URL` | Neon → Connect, with connection pooling **on** (hostname contains `-pooler`) |
+| `DATABASE_URL_UNPOOLED` | The same, with pooling **off** — migrations need a direct connection |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | Clerk dashboard → API keys |
+| `CLERK_WEBHOOK_SIGNING_SECRET` | Optional locally: Clerk cannot reach `localhost`, and the app creates user rows on first write anyway |
+| `PLAID_CLIENT_ID`, `PLAID_SECRET` | Plaid dashboard → Developers → Keys (the sandbox secret) |
+| `PLAID_ENV` | Leave as `sandbox` |
+| `ENCRYPTION_KEY` | Encrypts Plaid tokens at rest. Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
 
-```env
-# Database
-DATABASE_URL="postgresql://..."
-
-# Clerk Authentication
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_...
-CLERK_SECRET_KEY=sk_...
-
-# Plaid
-PLAID_CLIENT_ID=your_client_id
-PLAID_SECRET=your_sandbox_secret
-PLAID_ENV=sandbox
-```
-
-### 4. Set Up the Database
+Create the tables, then start the app:
 
 ```bash
-npx prisma generate
-npx prisma db push
-```
-
-Optionally seed the database with demo data:
-
-```bash
-npx ts-node prisma/seed.ts
-```
-
-### 5. Run the Development Server
-
-```bash
+npx prisma migrate deploy
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to view the app.
+Open <http://localhost:3000> and sign up through Clerk. To link a bank, pick any
+institution in Plaid's sandbox and sign in with `user_good` / `pass_good`.
 
----
-
-## 📸 Pages & Modules
-
-| Route         | Description                                           |
-|---------------|-------------------------------------------------------|
-| `/`           | Main dashboard — income overview, chart, gig breakdown |
-| `/deductions` | Log freelance hardware & delivery mileage             |
-| `/student`    | Enter Form 1098-T / 1098-E data                       |
-| `/office`     | Home office deduction calculator                      |
-| `/export`     | Download/print CPA-ready tax organizer                |
-
----
-
-## 🗄️ Database Schema
-
-Key models in `prisma/schema.prisma`:
-
-- **`User`** — Core user linked to all financial data
-- **`IncomeSource`** — Tagged income streams (Freelance, Delivery, Other)
-- **`Transaction`** — Income/expense entries with `taxDeductible` flag
-- **`PlaidConnection`** — Stores secure Plaid access tokens
-- **`Form1098T`** / **`Form1098E`** — Student tax form data
-- **`HomeOfficeDeduction`** — Square footage and rent/utility inputs
-
----
-
-## 📦 Available Scripts
+Optional demo data for your account — your Clerk user id starts with `user_`:
 
 ```bash
-npm run dev      # Start development server
-npm run build    # Create production build
-npm run start    # Run production server
-npm run lint     # Lint with ESLint
+SEED_USER_ID=user_xxxxx npx tsx prisma/seed.ts
 ```
 
----
+Using a database that was created earlier with `prisma db push`? Mark the
+baseline as applied first — see [`prisma/migrations/README.md`](prisma/migrations/README.md).
 
-## 🔮 Roadmap
+## Scripts
 
-- [ ] Uber/DoorDash API integration for automatic mileage sync
-- [ ] Quarterly estimated tax reminder notifications
-- [ ] AI-powered deduction suggestions
-- [ ] Multi-year tax history comparisons
-- [ ] Mobile-responsive layout improvements
+| Command | Does |
+|---|---|
+| `npm run dev` | Development server on port 3000 |
+| `npm test` | The Vitest suite (273 tests) |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | ESLint |
+| `npm run build` | Production build |
+| `npm start` | Serve the production build |
 
----
+**On Windows**, stop `npm run dev` before running `npm run build` or
+`npx prisma generate`: both need files the dev server holds open, and fail with
+`EPERM`. Syncing the project folder with OneDrive makes this more likely.
 
-## 📄 License
+## Project layout
 
-This project is for educational and portfolio purposes.
+```
+src/
+├── app/                  Pages: dashboard, deductions & mileage, student forms,
+│   │                     home office, CPA export
+│   └── api/              Route handlers — each authenticates itself
+├── components/           Shared UI; its README is the design-system spec
+│   └── ui/               Buttons, cards, fields, the confirm dialog, …
+├── lib/
+│   ├── tax/              The federal engine: pure functions, cited, tested
+│   ├── taxYear.ts        How every route decides which year it is answering for
+│   ├── validation.ts     Input is refused, never silently corrected
+│   ├── crypto.ts         AES-256-GCM for Plaid tokens at rest
+│   └── user.ts           Creates the user row on first write
+└── proxy.ts              Next.js 16 Proxy: sends signed-out page visits to sign-in
+prisma/
+├── schema.prisma
+└── migrations/           Committed SQL, applied with `prisma migrate deploy`
+docs/
+├── decision-log.md       Why the code is the way it is
+└── audits/               The engine audit and two end-to-end passes, each triaged
+```
+
+## Known limitations
+
+- **Federal only**, 2024–2026, for one self-employed person. No state tax.
+- **No tax credits**, so the estimate is higher than the real liability for
+  anyone who qualifies for one. The full list of what is not modeled is shown
+  under every estimate and in the printed organizer.
+- **Plaid sandbox only.** Its sample data is regenerated whenever a bank is
+  linked, so re-linking an existing test account duplicates its history —
+  start a new test user for fresh bank data.
+- Engineering items still open are tracked in [PLAN.md](PLAN.md).
+
+## Documentation
+
+| Document | For |
+|---|---|
+| [`docs/decision-log.md`](docs/decision-log.md) | Why each significant choice was made, and what it replaced |
+| [`AGENTS.md`](AGENTS.md) | Rules for anyone — person or AI agent — changing this code |
+| [`PLAN.md`](PLAN.md) | The build plan, its history, and the open items |
+| [`src/lib/tax/README.md`](src/lib/tax/README.md) | The engine: computation order, sources, omissions |
+| [`src/components/README.md`](src/components/README.md) | UI tokens, components and page conventions |
+| [`prisma/migrations/README.md`](prisma/migrations/README.md) | Schema history and how to apply it |
+| [`docs/audits/`](docs/audits/) | The three audits, their evidence and their triage |
+
+## License
+
+For educational and portfolio purposes.

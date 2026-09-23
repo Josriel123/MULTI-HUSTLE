@@ -1,6 +1,10 @@
 # Multi-Hustle — Build Plan
 
-Working agreement for the four agents on this repo. **Read this before touching any file.**
+Working agreement for the four agents on this repo, its history, and the items
+still open. **Decisions and their reasons now live in
+[`docs/decision-log.md`](docs/decision-log.md)**, and the rules every
+contributor follows are in [`AGENTS.md`](AGENTS.md); this file keeps the build
+history and the open list at the bottom.
 
 ## Scope
 
@@ -23,7 +27,7 @@ The app tells people what they may owe the IRS. Invented numbers are the main ri
 
 ## Environment
 
-Single `.env` file at the repo root — **not** `.env.local`. The Prisma CLI reads only `.env`; Next.js reads both. One file keeps `prisma db push` and `next dev` on the same values. Copy `.env.example` to start.
+Single `.env` file at the repo root — **not** `.env.local`. The Prisma CLI reads only `.env`; Next.js reads both. One file keeps `prisma migrate` and `next dev` on the same values. Copy `.env.example` to start.
 
 Schema changes ship as SQL under `prisma/migrations/` (see the README there). An existing database created with `prisma db push` is baselined once with `prisma migrate resolve --applied 20260909000000_init`, then `prisma migrate deploy`.
 
@@ -36,11 +40,14 @@ Neon needs **two** connection strings: `DATABASE_URL` (pooled, hostname has `-po
 | 0 — Boot | Opus 5 | Install, security patches, green build, Neon connected | **Done** |
 | 1 — Stop the bleeding | Opus 5 | User bootstrap, Plaid consolidation, idempotent sync, token encryption, auth gating | **Done** |
 | 2 — Tax engine | Fable 5.1 wrote → Astra audited → Fable fixed | `src/lib/tax/`, plus `Float` → `Decimal` migration | **Done** — merged to `master`. Audited independently (11 findings, [triaged](docs/audits/federal-tax-2026-09-09/TRIAGE.md) and fixed); 161 tests, 270/270 boundary probes. Migrations applied to the main Neon DB 2026-09-09. |
-| 3 — Real data | Gemini 3.8 Flash | Real chart aggregation, mileage as logged entry, transaction edit/delete | **Ready** |
-| 4 — Design | Fable 5.1 designs → Gemini converts | Enable Tailwind, component set, kill inline styles, responsive | **Design done**: Tailwind on, tokens + component set in `src/components/` (spec in its README), responsive shell, dashboard and home office converted as the reference. Gemini converts deductions, student and export to the same pattern. |
-| 5 — E2E + ship | Astra drives → Opus 5 integrates | Browser-driven verification, PDF export, Vercel | Blocked on all |
+| 3 — Real data | Gemini 3.8 Flash | Real chart aggregation, mileage as logged entry, transaction edit/delete | **Done** 2026-09-10; 3.5 (forms per tax year) by Opus 5 |
+| 4 — Design | Fable 5.1 designs → Gemini converts | Enable Tailwind, component set, kill inline styles, responsive | **Done** 2026-09-10: no inline styles anywhere; `src/components/README.md` is the spec |
+| 5 — E2E + ship | Astra drives → Opus 5 integrates | Browser-driven verification, PDF export, Vercel | **E2E done**: two browser passes ([first](docs/audits/e2e-2026-09-16/TRIAGE.md), [second](docs/audits/e2e-2026-09-18/REPORT.md)), every finding fixed. **Ship not started** — see the open list. |
 
 ### Note for Phases 3 and 4: the pages don't use the engine yet
+
+*Resolved in Phases 3 and 4 — every page now reads the estimate payload.
+Kept as the brief those phases worked from.*
 
 Phase 2 delivered a correct engine. It did **not** change what the dashboard
 displays. The pages still duplicate tax arithmetic locally, including the old
@@ -105,7 +112,7 @@ Fixed in Phase 1:
 - **`prisma/seed.ts` called `deleteMany()` unfiltered on User, IncomeSource and Transaction** — running it wiped every account in the database, not just the demo one. Now requires `SEED_USER_ID`, refuses non-Clerk ids, and scopes deletes.
 - Sync no longer auto-marks "Food and Drink" / "Shops" as `taxDeductible` — that flagged groceries as business expenses and understated tax owed. Defaults to false; real categorisation is Phase 2.
 
-Fixed in Phase 2 (branch `phase-2-tax-engine`, pending audit):
+Fixed in Phase 2 (audited 2026-09-09, fixes merged 2026-09-10):
 - **The tax calculation was invented.** Flat 12% with no brackets or standard deduction, 15.3% SE tax on the whole net profit, no QBI deduction. Replaced by `src/lib/tax/`: pure functions in Form 1040 order, every rule cited (IRC, Rev. Procs, form instructions), every function tested with hand-worked answers. Filing status and tax year are inputs; 2024–2026 parameters are transcribed from the Rev. Procs and self-checked by tests.
 - **Deduction detection was string matching** on descriptions. Replaced by `Transaction.category` (nullable; vocabulary and tax treatment in `src/lib/tax/categories.ts`). Uncategorised income defaults to business income with a warning; uncategorised expenses followed the `taxDeductible` flag until the e2e audit (below) made the category the only input. Descriptions are never read.
 - **Money was `Float`.** Eight columns across four tables are now `DECIMAL(12,2)`; the migration SQL is committed and was verified against Postgres 18 with float fixtures. `User.filingStatus` and `User.claimedAsDependent` added (defaults: `single`, `false`).
@@ -116,19 +123,25 @@ Fixed in Phase 2 (branch `phase-2-tax-engine`, pending audit):
 
 Fixed after the end-to-end audit (2026-09-16, `docs/audits/e2e-2026-09-16/`, Group A, branch `e2e-group-a`):
 - **Logged mileage never reached the calculation** (F1). Trips were priced after `estimateFederalTax` for display only, and the chart route never saw them. Mileage is now a Schedule C line 9 input (`ScheduleCInput.mileage`, priced per trip date; standard rate vs actual `car_and_truck` costs resolved as one method per Pub. 463 with a `vehicle_method_conflict` warning), and the summary and chart routes share one `estimateFromRows` so they cannot disagree.
-- **The "tax-deductible" checkbox did nothing when a category was set** (F2). The category is now the only input: the checkbox is gone from the ledger, `personal` marks an expense non-deductible, an uncategorised expense is personal and warned, the API derives `taxDeductible` from the category and ignores it in request bodies, and migration `20260916000000_category_is_source_of_truth` moves manual un-ticked rows in deductible categories to `personal` and gives manual ticked uncategorised rows `other_business_expense` (Plaid rows untouched: their flag was a default or the removed heuristic, not a choice). Verified on PGlite; **not yet applied to main**, see `prisma/migrations/README.md` for the command and the four rows it touches.
+- **The "tax-deductible" checkbox did nothing when a category was set** (F2). The category is now the only input: the checkbox is gone from the ledger, `personal` marks an expense non-deductible, an uncategorised expense is personal and warned, the API derives `taxDeductible` from the category and ignores it in request bodies, and migration `20260916000000_category_is_source_of_truth` moves manual un-ticked rows in deductible categories to `personal` and gives manual ticked uncategorised rows `other_business_expense` (Plaid rows untouched: their flag was a default or the removed heuristic, not a choice). Verified on PGlite; applied to main 2026-09-17, after which no row's flag disagrees with its category. The four rows it changed are listed in `prisma/migrations/README.md`.
 - Adversarial review of the change (4 lenses, 2 skeptics per finding) confirmed and fixed: per-trip rounding on line 9 (now one product per rate period), only the first rate period cited, Plaid defaults misread as un-ticks by the migration, per-source deductions counting vehicle costs the engine excluded, the edit modal failing on legacy categories outside the vocabulary.
 
-Still open:
-- **Mileage tab total vs the estimate.** `GET /api/mileage` prices each trip at the standard rate for the list; when actual `car_and_truck` costs are larger, the estimate applies those instead and deducts $0 of standard mileage, so the tab's total differs from what Schedule C took. The summary now exposes `sources.delivery.vehicleMethod`, `mileage` and `mileageDeduction` read back from the estimate; the tab should show those. (Owner of `MileageSection.tsx` / `api/mileage`.)
-- **Per-source "deductions" are amounts entered**, not allowed: the 50% meals limit and the de minimis equipment cap are applied per category by the engine, so the per-source figure can exceed what Schedule C took. Excluded vehicle costs are now removed; the rest needs per-source attribution in the engine or a relabel on the dashboard and organizer.
-- **The chart is hardcoded.** `api/dashboard/chart` returns seven literal month objects. It claims $36,000 gross against $47,500 of real data. (Phase 3)
-- ~~**Mileage has no data source yet.**~~ Logged in Phase 3; wired into the estimate itself by the e2e audit fixes above.
-- ~~**Tailwind 4 is installed but dead**~~ **Fixed in Phase 4.** `globals.css` imports Tailwind and aliases the existing palette as theme tokens; the dashboard and home office pages have zero inline styles. Deductions, student and export still carry theirs until Gemini converts them (`src/components/README.md` is the spec).
-- ~~Two component directories~~ **Fixed in Phase 4.** `src/components/` only.
-- **Phase 4 follow-ups for the remaining conversions:** `student/page.tsx` still computes `box5 - box1` locally and posts without a tax year; `deductions/page.tsx` and `export/page.tsx` still use the legacy `.card`/`.text-secondary` classes and lose list bullets under Tailwind's reset until converted. The student copy was rewritten in Phase 4 (no more "bypass the 15.3% penalty"); the layout was not.
-- An orphaned demo user (cuid id, 4 transactions) left over from the old seed script — invisible to the app, safe to delete.
-- Stale `dev.db` / `prisma/dev.db` still tracked in git.
-- ~~**Form1098T, Form1098E and HomeOfficeDeduction have no tax year.**~~ **Fixed in Phase 3.5.** All three now carry `taxYear` under `@@unique([userId, taxYear])`, so a 2025 request no longer sees the 2026 statement. Year resolution is shared in `src/lib/taxYear.ts` rather than copied per route, and the fallback past the end of the parameter tables raises `tax_year_fallback` rather than applying the wrong year silently.
-  - **Still open for Phase 4:** the student and office pages post without a year, so they always write the current one. There is no year picker anywhere in the UI, which means a user cannot enter or review a prior year's 1098-T even though the data model now supports it.
-- `GET /api/transactions` now serialises `amount` as a decimal string (Prisma.Decimal → JSON). The pages coerce it fine via `Intl.NumberFormat`; Phase 3 should decide whether the API returns numbers. Pages still duplicate engine arithmetic locally (`student/page.tsx` assumes 12%, `office/page.tsx` assumes 27.3%); Phase 4 should read `estimate` instead. (Phases 3–4)
+Fixed after the end-to-end audit, Groups B–D (2026-09-17, same TRIAGE):
+- The ledger and its CSV now cover only the selected tax year (F3); the CPA Schedule C detail includes receipts with no assigned source (F5); the organizer states how many rows came from a bank instead of claiming "Plaid-verified" (F6); the tax year lives in the URL (F4); the not-modeled list is rendered under every estimate (F7).
+- Input is refused rather than silently corrected — no more `.abs()` on edits or `Math.max(0, …)` on the home office (F8, F9, P3) — and one failing estimate no longer blanks the student and home office pages (F8).
+- Sync adopts rows imported before `plaidTransactionId` existed instead of duplicating them on a re-link, comparing amounts as `Decimal` — a JavaScript number missed 3 of 15 real rows (D22).
+
+Fixed after the second end-to-end pass (2026-09-23, `docs/audits/e2e-2026-09-18/`):
+- The printed organizer drops no disclosure: the assumptions and not-modeled lists print expanded (S1, D25).
+- The mileage rate card reads the year's rates from the engine instead of a `'0.725'` typed into the component (S2, D26); `GET /api/mileage` is scoped to the tax year even when the request omits it, which it previously was not.
+- No browser dialogs remain (D24). The Deductions page loads independently like the others (D21).
+
+Still open (verified 2026-09-23):
+- **Not deployed.** Nothing has been pushed since April: `origin/master` still holds the pre-rebuild app. Shipping needs a Clerk production instance, a Neon production branch, the Clerk webhook secret, and hosting — the owner's call.
+- **Step 1's UI is untested in a browser.** The confirm dialog, the mileage rate card and the printed disclosures are covered by tests of their logic and markup, but no one has clicked through them.
+- **The mileage card shows the standard-rate value even when actual vehicle costs win.** The engine then deducts the actual costs and none of the mileage (Pub. 463, one method per vehicle) and warns; the card's caption says so, but its figure should be what Schedule C took — the summary already exposes `sources.delivery.vehicleMethod` and `mileageDeduction`.
+- **Per-source "deductions" are amounts entered, not allowed.** The engine applies the 50% meals limit and the de minimis equipment cap per category, so a per-source figure on the dashboard and organizer can exceed what Schedule C took. Needs per-source attribution in the engine, or a relabel.
+- **The five optional inputs added in Phase 2 cannot be entered:** W-2 box 7 tips, W-2 box 6 Medicare withholding, joint-return W-2 ownership, the MFS spouse-itemizes flag, and restricted scholarship amounts have no column and no field. The engine accepts them and warns when a missing one matters, so estimates are safe but less precise.
+- **Re-link adoption has not run live.** The matching was verified read-only against the 15 real legacy rows (15 of 15); a same-item replay on a test account would test the rest. Never re-link the populated sandbox account (D23).
+- **An orphaned demo user** (cuid id, 4 transactions) from the pre-rebuild seed script is invisible to the app and safe to delete.
+- **`dev.db` and `prisma/dev.db` are still tracked** — stale SQLite files from before the rebuild. `git rm --cached dev.db prisma/dev.db`; the agent's permission classifier blocks it.
