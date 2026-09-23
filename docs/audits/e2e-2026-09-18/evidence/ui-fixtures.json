@@ -1,0 +1,36 @@
+{
+  "email": "audit-e2e-20260916-loan+clerk_test@example.com",
+  "sessionId": "sess_3JQLdtMLvZ5PLPHULklybuknxZd",
+  "transaction": {
+    "status": 201,
+    "body": {
+      "id": "cmu6ij0ee000516xgdjt550xe",
+      "amount": "12.34",
+      "type": "Expense",
+      "date": "2026-09-18T00:00:00.000Z",
+      "description": "E2E SECOND PASS 20260918 disposable delete test",
+      "taxDeductible": false,
+      "category": "personal",
+      "userId": "user_3JQLdqhNd1vXEHY4SdqpnNB7qU5",
+      "incomeSourceId": null,
+      "plaidTransactionId": null,
+      "incomeSource": null
+    }
+  },
+  "mileage": {
+    "status": 201,
+    "body": {
+      "log": {
+        "id": "cmu6ij0n3000716xgys2b6n5i",
+        "date": "2026-09-18T00:00:00.000Z",
+        "miles": "12.50",
+        "purpose": "E2E SECOND PASS 20260918 disposable delete test",
+        "incomeSourceId": null,
+        "incomeSource": null,
+        "ratePerMile": "0.7600",
+        "deduction": "9.50",
+        "createdAt": "2026-09-18T05:23:17.631Z"
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "method": "Plaid sandbox API fixture; does not verify Link UI",
+  "institution": "First Platypus Bank",
+  "exchange": {
+    "status": 200,
+    "body": {
+      "success": true,
+      "message": "Bank linked successfully!"
+    }
+  },
+  "sync": {
+    "status": 200,
+    "body": {
+      "success": true,
+      "count": 16,
+      "removed": 0,
+      "adopted": 0
+    }
+  }
+}

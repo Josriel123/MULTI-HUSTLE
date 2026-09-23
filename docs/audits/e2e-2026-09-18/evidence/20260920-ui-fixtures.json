@@ -1,0 +1,62 @@
+{
+  "email": "audit-e2e-20260916-forms+clerk_test@example.com",
+  "sessionId": "sess_3Jc4nRkf8Nla6RMoDFnAsFb1ihg",
+  "baselineTransactions": {
+    "status": 200,
+    "body": [
+      {
+        "id": "cmu4ilr7a0003lxauy5pkq97m",
+        "amount": "9.00",
+        "type": "Expense",
+        "date": "2026-09-16T00:00:00.000Z",
+        "description": "E2E AUDIT negative edit and delete",
+        "taxDeductible": true,
+        "category": "other_business_expense",
+        "userId": "user_3JOw7yRW1b6ZoE377GxAK4uxCxY",
+        "incomeSourceId": null,
+        "plaidTransactionId": null,
+        "incomeSource": null
+      }
+    ]
+  },
+  "baselineMileage": {
+    "status": 200,
+    "body": {
+      "logs": [],
+      "totalMiles": "0.00",
+      "totalDeduction": "0.00"
+    }
+  },
+  "transaction": {
+    "status": 201,
+    "body": {
+      "id": "cmuagcynx00013wn1t7tn4ghc",
+      "amount": "13.37",
+      "type": "Expense",
+      "date": "2026-09-20T00:00:00.000Z",
+      "description": "E2E SECOND PASS 20260920 DELETE ONLY",
+      "taxDeductible": true,
+      "category": "supplies",
+      "userId": "user_3JOw7yRW1b6ZoE377GxAK4uxCxY",
+      "incomeSourceId": null,
+      "plaidTransactionId": null,
+      "incomeSource": null
+    }
+  },
+  "mileage": {
+    "status": 201,
+    "body": {
+      "log": {
+        "id": "cmuagcyyr00033wn1dm9ymboq",
+        "date": "2026-09-20T00:00:00.000Z",
+        "miles": "10.00",
+        "purpose": "E2E SECOND PASS 20260920 DELETE ONLY",
+        "incomeSourceId": null,
+        "incomeSource": null,
+        "ratePerMile": "0.7600",
+        "deduction": "7.60",
+        "createdAt": "2026-09-20T23:33:40.995Z"
+      }
+    }
+  }
+}

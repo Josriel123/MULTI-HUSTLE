@@ -1,0 +1,15 @@
+{
+  "checkedAt": "2026-09-22T21:54:18.834Z",
+  "method": "Readback after browser Link and browser Sync",
+  "status": {
+    "linked": true,
+    "linkedAt": "2026-09-22T21:53:33.722Z",
+    "hasSynced": true
+  },
+  "totalRows": 49,
+  "bankRows": 48,
+  "manualRows": 1,
+  "uniquePlaidIds": 48,
+  "originalRowPresent": true,
+  "deletedFixturePresent": false
+}

@@ -1,0 +1,91 @@
+{
+  "date": "2026-09-18T05:22:13.640Z",
+  "transactionCreate": {
+    "status": 201,
+    "body": {
+      "id": "cmu6ihner000116xgkvlpsemn",
+      "amount": "12.34",
+      "type": "Expense",
+      "date": "2026-09-18T00:00:00.000Z",
+      "description": "E2E SECOND PASS 20260918 disposable delete test",
+      "taxDeductible": false,
+      "category": "personal",
+      "userId": "user_3JOw7yRW1b6ZoE377GxAK4uxCxY",
+      "incomeSourceId": null,
+      "plaidTransactionId": null,
+      "incomeSource": null
+    }
+  },
+  "mileageCreate": {
+    "status": 201,
+    "body": {
+      "log": {
+        "id": "cmu6ihno6000316xghip725wb",
+        "date": "2026-09-18T00:00:00.000Z",
+        "miles": "12.50",
+        "purpose": "E2E SECOND PASS 20260918 disposable delete test",
+        "incomeSourceId": null,
+        "incomeSource": null,
+        "ratePerMile": "0.7600",
+        "deduction": "9.50",
+        "createdAt": "2026-09-18T05:22:14.166Z"
+      }
+    }
+  },
+  "transactions": {
+    "id": "cmu6ihner000116xgkvlpsemn",
+    "foreignDelete": {
+      "status": 403,
+      "body": {
+        "error": "Forbidden"
+      }
+    },
+    "anonymousDelete": {
+      "status": 401,
+      "body": {
+        "error": "Unauthorized"
+      }
+    },
+    "survives": true,
+    "ownerDelete": {
+      "status": 200,
+      "body": {
+        "success": true
+      }
+    },
+    "secondDelete": {
+      "status": 404,
+      "body": {
+        "error": "Transaction not found"
+      }
+    }
+  },
+  "mileage": {
+    "id": "cmu6ihno6000316xghip725wb",
+    "foreignDelete": {
+      "status": 403,
+      "body": {
+        "error": "Forbidden"
+      }
+    },
+    "anonymousDelete": {
+      "status": 401,
+      "body": {
+        "error": "Unauthorized"
+      }
+    },
+    "survives": true,
+    "ownerDelete": {
+      "status": 200,
+      "body": {
+        "success": true
+      }
+    },
+    "secondDelete": {
+      "status": 404,
+      "body": {
+        "error": "Mileage log not found"
+      }
+    }
+  }
+}

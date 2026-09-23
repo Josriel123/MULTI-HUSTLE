@@ -1,0 +1,89 @@
+{
+  "before": {
+    "id": "cmu6inm56000p16xgybdi41du",
+    "amount": "25.00",
+    "type": "Expense",
+    "date": "2026-09-11T00:00:00.000Z",
+    "description": "CREDIT CARD 3333 PAYMENT *//",
+    "taxDeductible": false,
+    "category": null,
+    "userId": "user_3JQLdqhNd1vXEHY4SdqpnNB7qU5",
+    "incomeSourceId": null,
+    "plaidTransactionId": "vKoMlnv591IWz6aWpkz4FEpxwMm7xeUybz315",
+    "incomeSource": null
+  },
+  "amountAttempt": {
+    "status": 400,
+    "body": {
+      "error": "Cannot modify amount of a Plaid-sourced transaction; next bank sync would overwrite it. Only the tax category may be edited."
+    }
+  },
+  "dateAttempt": {
+    "status": 400,
+    "body": {
+      "error": "Cannot modify date of a Plaid-sourced transaction; next bank sync would overwrite it. Only the tax category may be edited."
+    }
+  },
+  "after": {
+    "id": "cmu6inm56000p16xgybdi41du",
+    "amount": "25.00",
+    "type": "Expense",
+    "date": "2026-09-11T00:00:00.000Z",
+    "description": "CREDIT CARD 3333 PAYMENT *//",
+    "taxDeductible": false,
+    "category": null,
+    "userId": "user_3JQLdqhNd1vXEHY4SdqpnNB7qU5",
+    "incomeSourceId": null,
+    "plaidTransactionId": "vKoMlnv591IWz6aWpkz4FEpxwMm7xeUybz315",
+    "incomeSource": null
+  },
+  "afterUiOfficeCategory": {
+    "id": "cmu6inm56000p16xgybdi41du",
+    "amount": "25.00",
+    "type": "Expense",
+    "date": "2026-09-11T00:00:00.000Z",
+    "description": "CREDIT CARD 3333 PAYMENT *//",
+    "taxDeductible": true,
+    "category": "office_expense",
+    "userId": "user_3JQLdqhNd1vXEHY4SdqpnNB7qU5",
+    "incomeSourceId": null,
+    "plaidTransactionId": "vKoMlnv591IWz6aWpkz4FEpxwMm7xeUybz315",
+    "incomeSource": null
+  },
+  "afterUiPersonalCategory": {
+    "id": "cmu6inm56000p16xgybdi41du",
+    "amount": "25.00",
+    "type": "Expense",
+    "date": "2026-09-11T00:00:00.000Z",
+    "description": "CREDIT CARD 3333 PAYMENT *//",
+    "taxDeductible": false,
+    "category": "personal",
+    "userId": "user_3JQLdqhNd1vXEHY4SdqpnNB7qU5",
+    "incomeSourceId": null,
+    "plaidTransactionId": "vKoMlnv591IWz6aWpkz4FEpxwMm7xeUybz315",
+    "incomeSource": null
+  },
+  "repeatSync": {
+    "status": 200,
+    "body": {
+      "success": true,
+      "count": 48,
+      "removed": 0,
+      "adopted": 0
+    }
+  },
+  "afterSync": {
+    "id": "cmu6inm56000p16xgybdi41du",
+    "amount": "25.00",
+    "type": "Expense",
+    "date": "2026-09-11T00:00:00.000Z",
+    "description": "CREDIT CARD 3333 PAYMENT *//",
+    "taxDeductible": false,
+    "category": "personal",
+    "userId": "user_3JQLdqhNd1vXEHY4SdqpnNB7qU5",
+    "incomeSourceId": null,
+    "plaidTransactionId": "vKoMlnv591IWz6aWpkz4FEpxwMm7xeUybz315",
+    "incomeSource": null
+  },
+  "rowCountAfterSync": 49
+}
