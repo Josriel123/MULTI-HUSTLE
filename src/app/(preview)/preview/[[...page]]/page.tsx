@@ -8,9 +8,10 @@ import { PreviewHarness } from './PreviewHarness';
  * empty account. `?tour=1` starts the guided tour.
  *
  * Exists so the UI can be checked (and screenshotted) without signing in or
- * touching the database. Two guards keep it out of production: this 404s
- * there, and src/proxy.ts only lets it past sign-in outside production. Its layout,
- * src/app/(preview)/layout.tsx, is the app frame without the agreement step.
+ * touching the database. It 404s in production, which is the guard: the
+ * proxy checks nothing (D53), and the page holds no real data. Its layout,
+ * src/app/(preview)/layout.tsx, is the app frame without the agreement step
+ * or sign-in.
  */
 export default async function PreviewPage({ params }: { params: Promise<{ page?: string[] }> }) {
   if (process.env.NODE_ENV === 'production') notFound();

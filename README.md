@@ -189,7 +189,7 @@ src/
 │   ├── formInput.ts      The same, for W-2s, payments and the tax profile
 │   ├── crypto.ts         AES-256-GCM for Plaid tokens at rest
 │   └── user.ts           Creates the user row on first write
-└── proxy.ts              Next.js 16 Proxy: public pages through, the rest to sign-in
+└── proxy.ts              Next.js 16 Proxy: the Clerk session, and / to /welcome when signed out
 prisma/
 ├── schema.prisma
 └── migrations/           Committed SQL, applied with `prisma migrate deploy`

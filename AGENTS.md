@@ -45,7 +45,11 @@ everything outside its markers alone.
    `InlineStatus`, instead of `confirm()` and `alert()`. (D24)
 9. **Anything a paper reader needs prints expanded.** A closed `<details>`
    does not print. (D25)
-10. **Proxy is optimistic; every route handler authenticates itself.** (D7)
+10. **The proxy checks nothing; every route handler authenticates itself**
+    with `auth()` or `requireUser()`, and the `(app)` layout protects the
+    app's pages (`auth.protect()` on the server, `SignedOutRedirect` in the
+    browser). Never protect by listing paths in the proxy.
+    `auth-boundaries.test.ts` enforces all three. (D7, D53)
 11. **Colours are tokens.** Components use the utilities backed by
     `src/app/globals.css`, never a typed colour; a new colour goes into the
     light block, the dark block and `@theme` together. (D33)
@@ -75,9 +79,9 @@ everything outside its markers alone.
     features; never imply IRS affiliation or that the estimate is advice or a
     return. (D49)
 17. **Public pages stay public.** A page a signed-out visitor needs (a policy,
-    sign-in) lives in `src/app/(public)/` and is listed in the proxy's
-    `isPublicRoute`; everything else sits behind sign-in and the agreement
-    step in `src/app/(app)/`. (D39, D40)
+    sign-in) lives in `src/app/(public)/`; everything else lives in
+    `src/app/(app)/`, whose layout puts it behind sign-in and the agreement
+    step. Where a page lives decides who can see it. (D39, D40, D53)
 
 ## Data safety
 

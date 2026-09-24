@@ -18,7 +18,7 @@ old entry and change nothing else in it.
 | Scope and process | [D1](#d1) · [D9](#d9) · [D12](#d12) · [D27](#d27) · [D36](#d36) · [D47](#d47) · [D50](#d50) |
 | Data and money | [D2](#d2) · [D3](#d3) · [D10](#d10) · [D15](#d15) · [D20](#d20) · [D22](#d22) · [D32](#d32) · [D37](#d37) |
 | Tax engine | [D8](#d8) · [D11](#d11) · [D13](#d13) · [D14](#d14) · [D17](#d17) · [D28](#d28) · [D29](#d29) · [D30](#d30) · [D48](#d48) |
-| Auth, Plaid and security | [D4](#d4) · [D5](#d5) · [D6](#d6) · [D7](#d7) · [D23](#d23) · [D31](#d31) · [D45](#d45) · [D52](#d52) |
+| Auth, Plaid and security | [D4](#d4) · [D5](#d5) · [D6](#d6) · [D7](#d7) · [D23](#d23) · [D31](#d31) · [D45](#d45) · [D52](#d52) · [D53](#d53) |
 | Privacy, consent and policies | [D39](#d39) · [D40](#d40) · [D41](#d41) · [D42](#d42) · [D49](#d49) · [D51](#d51) |
 | UI | [D16](#d16) · [D18](#d18) · [D19](#d19) · [D21](#d21) · [D24](#d24) · [D25](#d25) · [D26](#d26) · [D33](#d33) · [D34](#d34) · [D35](#d35) · [D38](#d38) · [D43](#d43) · [D44](#d44) · [D46](#d46) |
 
@@ -828,4 +828,33 @@ the Disconnect confirmation says so.
 **Where.** `src/lib/plaidSync.ts`, `src/lib/transfers.ts`,
 `src/app/api/plaid/`, `src/components/transactions/BankCard.tsx`,
 `TransactionList.tsx`, migration `20260925000000_multiple_banks`.
+
+## 2026-09-24 — Sign-in checks leave the proxy
+
+### <a id="d53"></a>D53 · The proxy checks nothing; each page layout and route handler checks for itself
+
+**Decision.** Builds on [D7](#d7). `src/proxy.ts` runs `clerkMiddleware()` to
+make the session available and keeps one routing rule, not a protection: a
+signed-out visit to `/` goes to `/welcome`. The list of public paths and the
+`auth.protect()` call are gone from it. The app's pages are protected by
+`src/app/(app)/layout.tsx`: `await auth.protect()` on the server (a
+signed-out page load goes to sign-in and comes back afterwards) and
+`SignedOutRedirect` in the browser, for a session that ends mid-visit, since
+a layout does not run again on every client-side navigation. Every API route
+already answered 401 itself. `auth-boundaries.test.ts` fails if path-based
+protection returns to the proxy, if the layout loses either check, or if an
+API route handler has no `auth()` or `requireUser()`.
+
+**Why.** Clerk 7 deprecated `createRouteMatcher` and logged a warning on
+every start: protection that depends on matching paths in the proxy can
+drift from how Next actually routes a request and leave something reachable.
+The app's pages hold no data of their own (everything comes from API routes
+that authenticate each request), so checking in the layout loses nothing,
+and a path nobody listed is protected by where it lives rather than by a
+list. Public pages need nothing: they sit in `(public)`, outside the layout
+that protects. An unknown path is now a plain 404 instead of a trip to
+sign-in.
+
+**Where.** `src/proxy.ts`, `src/app/(app)/layout.tsx`,
+`src/components/SignedOutRedirect.tsx`, `src/app/__tests__/auth-boundaries.test.ts`.
 

@@ -157,6 +157,8 @@ Done in the policies, onboarding and phone change (2026-09-23, branch `legal-onb
 
 Done 2026-09-23 (branch `multiple-banks`, D52; migration `20260925000000_multiple_banks` applied to main first, counts unchanged): several banks per user, each listed with its own Disconnect, synced together (a failing bank does not stop the others); the same bank cannot be connected twice; deposits that look like money moved between the user's own accounts are flagged with a one-tap "Mark as transfer", and the estimate warns about them.
 
+Done 2026-09-24 (D53): sign-in checks moved out of the proxy, which Clerk 7 had deprecated (`createRouteMatcher`): the `(app)` layout protects the app's pages on the server and in the browser, every API route checks for itself, and a test keeps it that way.
+
 Still open (2026-09-23):
 - **Bank re-authorisation.** When a bank's login expires, sync names it but cannot fix it: build Plaid Link update mode (a Link token with the connection's `access_token`) so the person signs in again on the same connection. Until then, disconnecting and reconnecting brings the bank's history in again (D52).
 - **Once this release is live, drop `User.plan`** in its own migration (SQL in `prisma/migrations/README.md`, D47). Migration `20260924000000_consent_record` was applied to main on 2026-09-23, counts unchanged, and `legal-onboarding-mobile` was then pushed to `master` at the owner's request.

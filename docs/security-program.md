@@ -37,9 +37,10 @@ into that list, the Privacy Policy and this table in the same change.
 
 ## 3. Safeguards in the code
 
-- **Access control.** Every route handler authenticates itself (AGENTS.md
-  invariant 10) and reads only the signed-in user's rows. The proxy is an
-  optimistic gate only.
+- **Access control.** Every route handler authenticates itself and reads
+  only the signed-in user's rows; the app's pages are protected by their
+  layout; the proxy checks nothing (AGENTS.md invariant 10, D53).
+  `auth-boundaries.test.ts` fails if an API route loses its check.
 - **Encryption.** TLS in transit (Vercel, Neon, Clerk and Plaid all require
   it; HSTS is sent). Plaid access tokens are encrypted with AES-256-GCM under
   `ENCRYPTION_KEY` before they are stored; all three tokens on the main
